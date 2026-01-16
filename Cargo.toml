@@ -11,6 +11,7 @@ rfd = "^0.17"
 
 # tokio 1.40+ 性能更好
 tokio = { version = "^1.42", features = ["full"] }
+tokio-util = { version = "^0.7", features = ["default"] }
 # reqwest 0.12 是最新大版本，注意 feature 配置
 reqwest = { version = "^0.12", features = ["json", "rustls-tls"] }
 

@@ -7,6 +7,7 @@ use crate::utils::setup_custom_fonts;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use std::thread;
+use tokio_util::sync::CancellationToken;
 
 pub struct MyApp {
     config: AppConfig,
@@ -15,6 +16,7 @@ pub struct MyApp {
     logs: Vec<LogEntry>, // <-- 改用 Vec 存储结构化日志
     msg_receiver: Receiver<AppMsg>,
     msg_sender: Sender<AppMsg>,
+    cancellation_token: Option<CancellationToken>,
 }
 
 impl MyApp {
@@ -32,6 +34,7 @@ impl MyApp {
             available_models: vec!["gpt-3.5-turbo".to_string(), "gpt-4o".to_string()],
             msg_receiver: receiver,
             msg_sender: sender,
+            cancellation_token: None,
         }
     }
 
@@ -53,7 +56,9 @@ impl MyApp {
                 .unwrap();
             rt.block_on(async {
                 let client = OpenAIClient::new(api_key, base_url, "default".to_string());
-                match client.fetch_models().await {
+                // 创建临时的 CancellationToken 用于模型获取
+                let token = CancellationToken::new();
+                match client.fetch_models(&token).await {
                     Ok(models) => {
                         let _ = sender.send(AppMsg::Log(LogEntry::new(
                             LogLevel::Success,
@@ -88,6 +93,12 @@ impl MyApp {
         let model = self.config.model.clone(); // 传递
         let batch_size = self.config.batch_size; // 传递
         let skip_existing = self.config.skip_existing.clone();
+        
+        // 创建新的 CancellationToken
+        let token = CancellationToken::new();
+        self.cancellation_token = Some(token.clone());
+        
+        let sender = self.msg_sender.clone();
 
         thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -104,10 +115,24 @@ impl MyApp {
                     model,
                     batch_size,
                     skip_existing,
+                    token,
                 )
                 .await;
+                let _ = sender.send(AppMsg::Log(LogEntry::new(
+                    LogLevel::Info,
+                    "任务已完成",
+                )));
             });
         });
+    }
+    
+    fn cancel_processing(&mut self) {
+        if let Some(token) = &self.cancellation_token {
+            token.cancel();
+            self.logs.push(LogEntry::new(LogLevel::Warn, "任务已被用户取消"));
+        }
+        self.is_processing = false;
+        self.cancellation_token = None;
     }
 }
 
@@ -120,8 +145,9 @@ impl eframe::App for MyApp {
                     if self.logs.len() > 1000 {
                         self.logs.remove(0);
                     }
-                    if entry.message.contains("完成") || entry.message.contains("任务终止") {
+                    if entry.message.contains("已完成") || entry.message.contains("任务终止") {
                         self.is_processing = false;
+                        self.cancellation_token = None;
                     }
                     self.logs.push(entry);
                 }
@@ -259,6 +285,9 @@ impl eframe::App for MyApp {
                 if self.is_processing {
                     ui.add_enabled(false, egui::Button::new("⏳ 处理中..."));
                     ui.spinner();
+                    if ui.button("❌ 取消任务").clicked() {
+                        self.cancel_processing();
+                    }
                 } else {
                     if ui.button("🚀 开始翻译").clicked() {
                         if self.config.api_key.is_empty() {

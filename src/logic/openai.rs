@@ -4,6 +4,8 @@ use serde_json::{json, Value, Map};
 use std::time::Duration;
 use tokio::time::sleep;
 use crate::log_warn;
+use tokio_util::sync::CancellationToken;
+use tokio::select;
 
 const MAX_RETRIES: u32 = 5;
 
@@ -29,13 +31,25 @@ impl OpenAIClient {
         }
     }
 
-    async fn send_with_retry(&self, builder_fn: impl Fn() -> RequestBuilder) -> Result<Response> {
+    async fn send_with_retry(
+        &self, 
+        builder_fn: impl Fn() -> RequestBuilder,
+        token: &CancellationToken
+    ) -> Result<Response> {
         let mut attempt = 0;
 
         loop {
+            if token.is_cancelled() {
+                return Err(anyhow!("任务已被用户取消"));
+            }
             let request = builder_fn();
             
-            let result = request.send().await;
+            let result = select! {
+                res = request.send() => res,
+                _ = token.cancelled() => {
+                    return Err(anyhow!("任务被用户取消"));
+                }
+            };
 
             match result {
                 Ok(resp) => {
@@ -90,13 +104,13 @@ impl OpenAIClient {
         }
     }
 
-    pub async fn fetch_models(&self) -> Result<Vec<String>> {
+    pub async fn fetch_models(&self, token: &CancellationToken) -> Result<Vec<String>> {
         let url = format!("{}/models", self.base_url);
         
         let resp = self.send_with_retry(|| {
             self.client.get(&url)
                 .header("Authorization", format!("Bearer {}", self.api_key))
-        }).await?;
+        }, token).await?;
 
         let json: Value = resp.json().await?;
         let mut models = Vec::new();
@@ -112,7 +126,7 @@ impl OpenAIClient {
     }
 
     // === 修改 translate_batch 使用重试 ===
-    pub async fn translate_batch(&self, data: Map<String, Value>, mod_id: &str) -> Result<Map<String, Value>> {
+    pub async fn translate_batch(&self, data: Map<String, Value>, mod_id: &str, token: &CancellationToken) -> Result<Map<String, Value>> {
         let system_prompt = format!(
             "你是一个《我的世界》(Minecraft) 模组本地化专家。当前模组 ID: 【{}】。\n\
             请将传入的 JSON Value (英文) 翻译为简体中文，Key 必须保持不变。\n\
@@ -135,7 +149,7 @@ impl OpenAIClient {
                 .header("Authorization", format!("Bearer {}", self.api_key))
                 .header("Content-Type", "application/json")
                 .json(&request_body) // reqwest 会自动处理 json 的克隆
-        }).await?;
+        }, token).await?;
 
         let resp_json: Value = resp.json().await?;
         let content = resp_json["choices"][0]["message"]["content"]

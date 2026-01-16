@@ -1,10 +1,9 @@
 name: Build Rust App
 
-# 触发条件：推送到 main 分支，或者推送了 tag (比如 v1.0.0)
+# 触发条件：推送到 main 分支，或者提交 PR
 on:
   push:
     branches: [ "main" ]
-    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -24,19 +23,19 @@ jobs:
             os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: mc_translator.exe
-            name: mc-translator-windows.exe
+            name: mc-translator-x86_64-windows.exe
 
           - os_name: Linux-x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bin: mc_translator
-            name: mc-translator-linux
+            name: mc-translator-x86_64-linux
 
           - os_name: macOS-x86_64
             os: macos-latest
             target: x86_64-apple-darwin
             bin: mc_translator
-            name: mc-translator-macos
+            name: mc-translator-x86_64-macos
 
     steps:
       - uses: actions/checkout@v4

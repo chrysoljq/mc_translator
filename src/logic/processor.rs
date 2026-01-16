@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Read, Write}; // 引入 BufRead, BufReader 用
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 use zip::ZipArchive;
+use tokio_util::sync::CancellationToken;
 
 fn is_allowed_dir(entry: &DirEntry, root: &Path) -> bool {
     if !entry.file_type().is_dir() {
@@ -47,12 +48,13 @@ async fn dispatch_file(
     client: &OpenAIClient,
     batch_size: usize,
     skip_existing: bool,
+    token: &CancellationToken,
 ) -> anyhow::Result<()> {
     let ext = path.extension().unwrap_or_default().to_string_lossy();
     match ext.as_ref() {
-        "jar" => process_jar(path, output, client, batch_size, skip_existing).await,
-        "json" => process_json(path, output, client, batch_size, skip_existing).await,
-        "lang" => process_lang(path, output, client, batch_size, skip_existing).await,
+        "jar" => process_jar(path, output, client, batch_size, skip_existing, token).await,
+        "json" => process_json(path, output, client, batch_size, skip_existing, token).await,
+        "lang" => process_lang(path, output, client, batch_size, skip_existing, token).await,
         _ => {
             log_warn!("跳过不支持的文件: {}", path.display());
             Ok(())
@@ -68,18 +70,23 @@ pub async fn run_processing_task(
     model: String,
     batch_size: usize,
     skip_existing: bool,
+    token: CancellationToken
 ) {
     let client = OpenAIClient::new(api_key, base_url, model);
     let input_path = Path::new(&input);
 
     let result = if input_path.is_file() {
-        dispatch_file(input_path, &output, &client, batch_size, skip_existing).await
+        dispatch_file(input_path, &output, &client, batch_size, skip_existing, &token).await
     } else if input_path.is_dir() {
         let walker = WalkDir::new(input_path)
             .into_iter()
             .filter_entry(|e| is_allowed_dir(e, input_path));
 
         for entry in walker.flatten() {
+            if token.is_cancelled() {
+                log_info!("任务已停止");
+                break;
+            }
             let path = entry.path();
             if path.is_file() {
                 let ext = path
@@ -100,7 +107,7 @@ pub async fn run_processing_task(
 
                 if should_process {
                     if let Err(e) =
-                        dispatch_file(path, &output, &client, batch_size, skip_existing).await
+                        dispatch_file(path, &output, &client, batch_size, skip_existing, &token).await
                     {
                         log_warn!("[错误] 处理 {} 失败: {}", path.display(), e);
                     }
@@ -127,6 +134,7 @@ async fn execute_translation_batches(
     client: &OpenAIClient,
     mod_id: &str,
     batch_size: usize,
+    token: &CancellationToken,
 ) -> serde_json::Map<String, serde_json::Value> {
     let safe_batch_size = if batch_size == 0 { 1 } else { batch_size };
     let total_items = map.len();
@@ -134,6 +142,7 @@ async fn execute_translation_batches(
     let mut final_map = serde_json::Map::new();
 
     for (idx, chunk) in keys.chunks(safe_batch_size).enumerate() {
+        if token.is_cancelled() { break; }
         log_info!(
             "正在翻译 [{}] 第 {}/{} 批 (共 {} 条)",
             mod_id,
@@ -149,10 +158,10 @@ async fn execute_translation_batches(
             }
         }
 
-        match client.translate_batch(sub_map.clone(), mod_id).await {
+        match client.translate_batch(sub_map.clone(), mod_id, token).await {
             Ok(translated) => final_map.extend(translated),
             Err(e) => {
-                log_warn!("批次失败 (保留原文): {}", e);
+                log_warn!("批次失败保留原文: {}", e);
                 final_map.extend(sub_map); // 失败回退
             }
         }
@@ -183,6 +192,7 @@ async fn process_jar(
     client: &OpenAIClient,
     batch_size: usize,
     skip_existing: bool,
+    token: &CancellationToken,
 ) -> anyhow::Result<()> {
     let file_name = jar_path.file_name().unwrap_or_default().to_string_lossy();
     log_info!("正在扫描 JAR: {}", file_name);
@@ -204,6 +214,11 @@ async fn process_jar(
     }
 
     for target_path in targets {
+        if token.is_cancelled() {
+            log_info!("JAR 处理已取消");
+            break;
+        }
+        
         // 从 zip 内部路径提取 modid
         let parts: Vec<&str> = target_path.split('/').collect();
         let mod_id = parts
@@ -231,7 +246,13 @@ async fn process_jar(
 
         if let serde_json::Value::Object(map) = json_data {
             // 使用提取的通用逻辑
-            let final_map = execute_translation_batches(&map, client, mod_id, batch_size).await;
+            let final_map = execute_translation_batches(&map, client, mod_id, batch_size, &token).await;
+
+            // 检查是否被取消，如果被取消则不保存
+            if token.is_cancelled() {
+                log_info!("任务已取消，放弃保存 JAR 文件: {:?}", final_path);
+                break;
+            }
 
             if let Some(parent) = final_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -253,6 +274,7 @@ async fn process_json(
     client: &OpenAIClient,
     batch_size: usize,
     skip_existing: bool,
+    token: &CancellationToken,
 ) -> anyhow::Result<()> {
     log_info!("处理 JSON 文件: {}", file_path.display());
 
@@ -284,7 +306,13 @@ async fn process_json(
     let json_data: serde_json::Value = serde_json::from_str(&content)?;
 
     if let serde_json::Value::Object(map) = json_data {
-        let final_map = execute_translation_batches(&map, client, &mod_id, batch_size).await;
+        let final_map = execute_translation_batches(&map, client, &mod_id, batch_size, &token).await;
+
+        // 检查是否被取消，如果被取消则不保存
+        if token.is_cancelled() {
+            log_info!("任务已取消，放弃保存 JSON 文件: {:?}", final_path);
+            return Ok(());
+        }
 
         if let Some(parent) = final_path.parent() {
             fs::create_dir_all(parent)?;
@@ -308,6 +336,7 @@ async fn process_lang(
     client: &OpenAIClient,
     batch_size: usize,
     skip_existing: bool,
+    token: &CancellationToken,
 ) -> anyhow::Result<()> {
     log_info!("处理 LANG 文件: {}", file_path.display());
 
@@ -360,7 +389,13 @@ async fn process_lang(
         return Ok(());
     }
 
-    let final_map = execute_translation_batches(&map, client, &mod_id, batch_size).await;
+    let final_map = execute_translation_batches(&map, client, &mod_id, batch_size, &token).await;
+
+    // 检查是否被取消，如果被取消则不保存
+    if token.is_cancelled() {
+        log_info!("任务已取消，放弃保存 Lang 文件: {:?}", final_path);
+        return Ok(());
+    }
 
     if let Some(parent) = final_path.parent() {
         fs::create_dir_all(parent)?;

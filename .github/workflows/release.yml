@@ -1,0 +1,89 @@
+name: Release
+
+# 触发条件：推送 tag (比如 v1.0.0)
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: mc_translator
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  build-and-release:
+    needs: prepare
+    name: Build and Release - ${{ matrix.platform.os_name }}
+    runs-on: ${{ matrix.platform.os }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os_name: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: mc_translator.exe
+            name: mc-translator-${{ needs.prepare.outputs.version }}-x86_64-windows.exe
+
+          - os_name: Linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: mc_translator
+            name: mc-translator-${{ needs.prepare.outputs.version }}-x86_64-linux
+
+          - os_name: macOS-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            bin: mc_translator
+            name: mc-translator-${{ needs.prepare.outputs.version }}-x86_64-macos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux Dependencies
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libssl-dev pkg-config
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache Cargo registry
+        uses: swatinem/rust-cache@v2
+
+      - name: Build Binary
+        run: cargo build --release --target ${{ matrix.platform.target }}
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mkdir -p release_assets
+          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} release_assets/${{ matrix.platform.name }}
+          cd release_assets
+          ls -la
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release_assets/${{ matrix.platform.name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
