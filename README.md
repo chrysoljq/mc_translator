@@ -4,10 +4,12 @@
 
 ## 功能特性
 
-- ✅ AI 智能翻译
-- ✅ 支持 JAR、LANG、JSON 单文件翻译
-- ✅ 支持包含 JAR、LANG、JSON 文件夹的批量翻译
-- ✅ 输出标准资源文件目录结构
+- AI 智能翻译
+- 支持 JAR、LANG、JSON 单文件翻译
+- 支持包含 JAR、LANG、JSON 文件夹的批量翻译
+- 输出标准资源文件目录结构
+
+![alt text](image.png)
 
 ## 许可证
 

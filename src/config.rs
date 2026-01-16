@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub output_path: String,
     pub model: String,
     pub batch_size: usize,
+    pub skip_existing: bool,
 }
 
 impl Default for AppConfig {
@@ -20,7 +21,8 @@ impl Default for AppConfig {
             input_path: String::new(),
             output_path: "./output_cn".to_string(),
             model: "gpt-3.5-turbo".to_string(), 
-            batch_size: 32,
+            batch_size: 200,
+            skip_existing: true,
         }
     }
 }

@@ -3,6 +3,7 @@ use reqwest::{Client, Response, StatusCode, RequestBuilder};
 use serde_json::{json, Value, Map};
 use std::time::Duration;
 use tokio::time::sleep;
+use crate::log_warn;
 
 const MAX_RETRIES: u32 = 5;
 
@@ -71,7 +72,7 @@ impl OpenAIClient {
                          return Err(anyhow!("请求失败 (HTTP {}): {}", status, text));
                     };
                     
-                    println!("请求遇到 {}, 等待 {:?} 后重试 (第 {}/{} 次)...", status, wait_time, attempt + 1, MAX_RETRIES);
+                    log_warn!("请求遇到 {}, 等待 {:?} 后重试 (第 {}/{} 次)...", status, wait_time, attempt + 1, MAX_RETRIES);
                     sleep(wait_time).await;
                 }
                 Err(e) => {
@@ -80,7 +81,7 @@ impl OpenAIClient {
                     }
                     
                     let wait_time = Duration::from_secs(2_u64.pow(attempt));
-                    println!("网络错误: {}, 等待 {:?} 后重试 (第 {}/{} 次)...", e, wait_time, attempt + 1, MAX_RETRIES);
+                    log_warn!("网络错误: {}, 等待 {:?} 后重试 (第 {}/{} 次)...", e, wait_time, attempt + 1, MAX_RETRIES);
                     sleep(wait_time).await;
                 }
             }
