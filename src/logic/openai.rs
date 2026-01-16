@@ -19,7 +19,7 @@ pub struct OpenAIClient {
 impl OpenAIClient {
     pub fn new(api_key: String, base_url: String, model: String) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(60)) // 建议设为 60秒
+            .timeout(Duration::from_secs(120)) // 建议设为 60秒
             .build()
             .unwrap_or_default();
 
