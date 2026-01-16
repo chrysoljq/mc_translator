@@ -1,0 +1,8 @@
+{
+  "api_key": "sk-aFy8EF1aeEExq5bLNak3n7i19ozIzVcYcdf6m4na3LHxw",
+  "base_url": "https://api.iqach.top/v1",
+  "input_path": "/disk/Games/MC/versions/MC Eternal 2.1.2/mods/idas_forge-1.12.1+1.20.1.jar",
+  "output_path": "/disk/code/python/mc_translator/output_cn",
+  "model": "gemini-2.5-flash",
+  "batch_size": 85
+}

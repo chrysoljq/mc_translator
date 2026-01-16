@@ -1,0 +1,33 @@
+[package]
+name = "mc_translator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "^0.33.3"
+egui = "^0.33.3"
+
+rfd = "^0.17"
+
+# tokio 1.40+ 性能更好
+tokio = { version = "^1.42", features = ["full"] }
+# reqwest 0.12 是最新大版本，注意 feature 配置
+reqwest = { version = "^0.12", features = ["json", "rustls-tls"] }
+
+# 工具库
+serde = { version = "^1.0", features = ["derive"] }
+serde_json = "^1.0"
+anyhow = "^1.0"
+crossbeam-channel = "^0.5"
+walkdir = "^2.5"
+
+# Zip 处理
+zip = "7.1.0"
+
+# 字体加载
+font-loader = "^0.11"
+
+# 日志
+log = "^0.4"
+env_logger = "^0.11"
+chrono = "^0.4"
