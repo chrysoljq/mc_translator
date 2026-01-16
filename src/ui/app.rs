@@ -109,7 +109,33 @@ impl eframe::App for MyApp {
                 }
             }
         }
-
+        egui::TopBottomPanel::bottom("footer_panel").show(ctx, |ui| {
+            ui.add_space(2.0); // 稍微加点顶部留白
+            ui.horizontal(|ui| {
+                // 左侧文本
+                ui.label(egui::RichText::new("v1.0.0").weak().size(10.0));
+                
+                // 右侧链接 (使用 right_to_left 让链接靠右对齐)
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // 注意：布局是“从右往左”添加的，所以顺序要反过来写
+                    
+                    // 链接 2
+                    ui.hyperlink_to(
+                        egui::RichText::new("去 GitHub 给个 Star ⭐").size(11.0), 
+                        "https://github.com/chrysoljq/mc_translator"
+                    );
+                    
+                    ui.label(egui::RichText::new("|").weak().size(11.0));
+                    
+                    // 链接 1
+                    ui.hyperlink_to(
+                        egui::RichText::new("关于作者").size(11.0), 
+                        "https://github.com/chrysoljq"
+                    );
+                });
+            });
+            ui.add_space(2.0); // 底部留白
+        });
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Minecraft Mod 汉化助手");
             ui.separator();
