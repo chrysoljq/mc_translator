@@ -66,10 +66,20 @@ pub async fn run_processing_task(
             let path = entry.path();
             if path.is_file() {
                 let ext = path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_default();
-                // 简单过滤，避免对非目标文件调用 async 逻辑
-                if ["jar", "json", "lang"].contains(&ext.as_str()) {
+
+                let should_process = match ext.as_str() {
+                    "jar" => true,
+                    "lang" => true,
+                    "json" => path.file_name()
+                                  .and_then(|n| n.to_str())
+                                  .map(|n| n == "en_us.json")
+                                  .unwrap_or(false),
+                    _ => false,
+                };
+
+                if should_process {
                     if let Err(e) = dispatch_file(path, &output, &client, batch_size, &sender).await {
-                         let _ = log(&sender, LogLevel::Warn, format!("[错误] 处理 {} 失败: {}", path.display(), e));
+                         let _ = log(&sender, LogLevel::Warn, format!("处理 {} 失败: {}", path.display(), e));
                     }
                 }
             }
