@@ -115,7 +115,11 @@ pub async fn run_processing_task(
 
                 let should_process = match ext.as_str() {
                     "jar" => true,
-                    "lang" => true,
+                    "lang" => path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|n| n == "en_us.lang") // 这里如果不报错就不需要改类型注解
+                        .unwrap_or(false),
                     "snbt" => true,
                     "json" => path
                         .file_name()
