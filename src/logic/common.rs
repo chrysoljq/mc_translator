@@ -79,9 +79,9 @@ pub fn extract_mod_id(path: &Path) -> String {
         .components()
         .map(|c| c.as_os_str().to_string_lossy())
         .collect();
-    if let Some(idx) = parts.iter().position(|x| x == "assets") {
-        if idx + 1 < parts.len() {
-            return parts[idx + 1].to_string();
+    if let Some(idx) = parts.iter().position(|x| x == "lang") {
+        if idx > 0 {
+            return parts[idx - 1].to_string();
         }
     }
 
