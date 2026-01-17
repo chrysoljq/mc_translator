@@ -54,7 +54,7 @@ pub async fn process_lang(
         .join(new_name);
 
     if !update_existing && skip_existing && final_path.exists() {
-        log_success!("跳过已存在: {:?}", final_path);
+        log_success!("跳过已存在的文件: {:?}", final_path);
         return Ok(());
     }
 

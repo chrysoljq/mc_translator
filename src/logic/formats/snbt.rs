@@ -22,7 +22,7 @@ pub async fn process_snbt(
     let output_path = Path::new(output_root).join(file_path.file_name().unwrap());
 
     if skip_existing && output_path.exists() {
-        log_success!("跳过已存在: {:?}", output_path);
+        log_success!("跳过已存在的文件: {:?}", output_path);
         return Ok(());
     }
 

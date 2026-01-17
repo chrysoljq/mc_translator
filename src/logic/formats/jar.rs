@@ -52,7 +52,7 @@ pub async fn process_jar(
         let out_sub_path = target_path.replace("en_us.json", "zh_cn.json");
         let final_path = Path::new(output_root).join(out_sub_path);
         if skip_existing && final_path.exists() {
-            log_info!("跳过已存在: {} -> {:?}", target_path, final_path);
+            log_info!("跳过已存在的文件: {} -> {:?}", target_path, final_path);
             continue;
         }
 

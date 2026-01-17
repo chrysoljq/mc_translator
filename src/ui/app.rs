@@ -99,7 +99,7 @@ impl MyApp {
         self.cancellation_token = Some(token.clone());
         
         let sender = self.msg_sender.clone();
-        let completion_msg = if is_update { "更新任务已完成" } else { "任务已完成" };
+        let completion_msg = if is_update { "所有更新任务已完成" } else { "所有翻译任务已完成" };
 
         thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -235,7 +235,6 @@ impl eframe::App for MyApp {
                         ui.text_edit_singleline(&mut self.config.input_path);
                         if ui
                             .button("📂 打开文件夹")
-                            .on_hover_text("选择包含 Jar 的目录")
                             .clicked()
                         {
                             if let Some(path) = rfd::FileDialog::new()
@@ -246,7 +245,7 @@ impl eframe::App for MyApp {
                             }
                         }
                         // 没必要了
-                        if ui.button("📄 打开文件").on_hover_text("选择单个汉化文件").clicked() {
+                        if ui.button("📄 打开文件").clicked() {
                             if let Some(file) = rfd::FileDialog::new()
                                 .add_filter("Minecraft Mod", &["jar", "json", "lang"])
                                 .set_directory(&mut self.config.input_path)
@@ -276,7 +275,7 @@ impl eframe::App for MyApp {
                         ui.label("批大小:");
                         ui.add(egui::DragValue::new(&mut self.config.batch_size).range(1..=1000)).on_hover_text("越大消耗越多，但准确性下降");
                         ui.add_space(10.0);
-                        ui.checkbox(&mut self.config.skip_existing, "跳过已存在");
+                        ui.checkbox(&mut self.config.skip_existing, "跳过已翻译的文件");
                     });
                     ui.end_row();
                 });
