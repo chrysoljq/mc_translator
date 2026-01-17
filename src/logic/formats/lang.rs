@@ -1,18 +1,17 @@
 use crate::log_info;
 use crate::logic::common::{
-    FileFormat, core_translation_pipeline, extract_mod_id, read_map_from_file,
+    FileFormat, TranslationContext, core_translation_pipeline, extract_mod_id, read_map_from_file
 };
 use crate::logic::openai::OpenAIClient;
 use std::path::Path;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 pub async fn process_lang(
     file_path: &Path,
     output_root: &str,
     client: &OpenAIClient,
-    batch_size: usize,
-    skip_existing: bool,
-    update_existing: bool,
+    ctx: Arc<TranslationContext>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     log_info!("处理 LANG: {}", file_path.display());
@@ -31,9 +30,9 @@ pub async fn process_lang(
         &file_name,
         Path::new(output_root),
         client,
-        batch_size,
-        skip_existing,
-        update_existing,
+        ctx.batch_size,
+        ctx.skip_existing,
+        ctx.update_existing,
         FileFormat::Lang,
         token,
     )

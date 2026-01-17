@@ -1,19 +1,18 @@
 use crate::log_info;
-use crate::logic::common::{FileFormat, core_translation_pipeline};
+use crate::logic::common::{FileFormat, TranslationContext, core_translation_pipeline};
 use crate::logic::openai::OpenAIClient;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
 use tokio_util::sync::CancellationToken;
 use zip::ZipArchive;
+use std::sync::Arc;
 
 pub async fn process_jar(
     jar_path: &Path,
     output_root: &str,
     client: &OpenAIClient,
-    batch_size: usize,
-    skip_existing: bool,
-    update_existing: bool,
+    ctx: Arc<TranslationContext>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     let jar_name = jar_path.file_name().unwrap_or_default().to_string_lossy();
@@ -74,9 +73,9 @@ pub async fn process_jar(
             &file_name,
             Path::new(output_root),
             client,
-            batch_size,
-            skip_existing,
-            update_existing,
+            ctx.batch_size,
+            ctx.skip_existing,
+            ctx.update_existing,
             FileFormat::Json,
             token,
         )

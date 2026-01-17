@@ -10,6 +10,13 @@ use tokio::task::JoinSet;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
 
+#[derive(Debug, Clone)]
+pub struct TranslationContext {
+    pub batch_size: usize,
+    pub skip_existing: bool,
+    pub update_existing: bool,
+}
+
 pub async fn execute_translation_batches(
     map: &Map<String, Value>,
     client: &OpenAIClient,
@@ -280,7 +287,7 @@ pub async fn core_translation_pipeline(
     } else {
         "生成"
     };
-    log_info!("{} 完成 (ModID: {}): {:?}", action_str, mod_id, final_path);
+    log_info!("{}完成 (ModID: {}): {:?}", action_str, mod_id, final_path);
 
     Ok(())
 }

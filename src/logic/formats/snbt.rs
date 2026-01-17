@@ -1,18 +1,18 @@
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
+use std::sync::Arc;
 use regex::Regex;
 use tokio_util::sync::CancellationToken;
 use crate::logic::openai::OpenAIClient;
-use crate::logic::common::execute_translation_batches;
+use crate::logic::common::{TranslationContext, execute_translation_batches};
 use crate::{log_info, log_success};
 
 pub async fn process_snbt(
     file_path: &Path,
     output_root: &str,
     client: &OpenAIClient,
-    batch_size: usize,
-    skip_existing: bool,
+    ctx: Arc<TranslationContext>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     log_info!("处理 SNBT 任务文件: {}", file_path.display());
@@ -25,7 +25,7 @@ pub async fn process_snbt(
         Path::new(output_root).join(file_path.file_name().unwrap())
     };
 
-    if skip_existing && output_path.exists() {
+    if ctx.skip_existing && output_path.exists() {
         log_success!("跳过已存在的文件: {:?}", output_path);
         return Ok(());
     }
@@ -93,7 +93,7 @@ pub async fn process_snbt(
         &extracted_map, 
         client, 
         &format!("Quest_{}", file_stem), 
-        batch_size, 
+        ctx.batch_size, 
         token
     ).await;
 

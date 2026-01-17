@@ -17,6 +17,7 @@ pub struct MyApp {
     msg_receiver: Receiver<AppMsg>,
     msg_sender: Sender<AppMsg>,
     cancellation_token: Option<CancellationToken>,
+    show_prompt_editor: bool,
 }
 
 impl MyApp {
@@ -35,13 +36,12 @@ impl MyApp {
             msg_receiver: receiver,
             msg_sender: sender,
             cancellation_token: None,
+            show_prompt_editor: false,
         }
     }
 
     fn check_connection_and_fetch_models(&self) {
-        let api_key = self.config.api_key.clone();
-        let base_url = self.config.base_url.clone();
-        // let skip_existing = self.config.skip_existing.clone();
+        let config = self.config.clone();
         let sender = self.msg_sender.clone();
 
         let _ = sender.send(AppMsg::Log(LogEntry::new(
@@ -55,8 +55,7 @@ impl MyApp {
                 .build()
                 .unwrap();
             rt.block_on(async {
-                let client = OpenAIClient::new(api_key, base_url, "default".to_string());
-                // 创建临时的 CancellationToken 用于模型获取
+                let client = OpenAIClient::new(config);
                 let token = CancellationToken::new();
                 match client.fetch_models(&token).await {
                     Ok(models) => {
@@ -86,20 +85,18 @@ impl MyApp {
         // 保存当前配置
         self.config.save();
 
-        let input = self.config.input_path.clone();
-        let output = self.config.output_path.clone();
-        let api_key = self.config.api_key.clone();
-        let base_url = self.config.base_url.clone();
-        let model = self.config.model.clone(); // 传递
-        let batch_size = self.config.batch_size; // 传递
-        let skip_existing = self.config.skip_existing.clone();
-        
+        let config = self.config.clone();
+
         // 创建新的 CancellationToken
         let token = CancellationToken::new();
         self.cancellation_token = Some(token.clone());
-        
+
         let sender = self.msg_sender.clone();
-        let completion_msg = if is_update { "所有更新任务已完成" } else { "所有翻译任务已完成" };
+        let completion_msg = if is_update {
+            "所有更新任务已完成"
+        } else {
+            "所有翻译任务已完成"
+        };
 
         thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -108,38 +105,76 @@ impl MyApp {
                 .unwrap();
 
             rt.block_on(async {
-                processor::run_processing_task(
-                    input,
-                    output,
-                    api_key,
-                    base_url,
-                    model,
-                    batch_size,
-                    skip_existing,
-                    is_update,
-                    token,
-                )
-                .await;
-                let _ = sender.send(AppMsg::Log(LogEntry::new(
-                    LogLevel::Info,
-                    completion_msg,
-                )));
+                processor::run_processing_task(config, is_update, token).await;
+                let _ = sender.send(AppMsg::Log(LogEntry::new(LogLevel::Info, completion_msg)));
             });
         });
     }
-    
+
     fn cancel_processing(&mut self) {
         if let Some(token) = &self.cancellation_token {
             token.cancel();
-            self.logs.push(LogEntry::new(LogLevel::Warn, "任务已被用户取消"));
+            self.logs
+                .push(LogEntry::new(LogLevel::Warn, "任务已被用户取消"));
         }
         self.is_processing = false;
         self.cancellation_token = None;
+    }
+
+    fn render_prompt_editor(&mut self, ctx: &egui::Context) {
+        let mut is_open = self.show_prompt_editor;
+        let mut should_close = false;
+
+        egui::Window::new("📝 自定义系统提示词 (System Prompt)")
+            .open(&mut is_open) // 这里借用的是局部的 is_open
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .vscroll(true)
+            .auto_sized()
+            .default_width(400.0)
+            .show(ctx, |ui| {
+                ui.label("在此设置发送给 AI 的系统级指令，可用于控制翻译风格、保留特定术语等。");
+                ui.separator();
+
+                egui::ScrollArea::vertical()
+                    .max_height(170.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.config.prompt)
+                                .hint_text("请输入 System Prompt...")
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(8)
+                                .font(egui::TextStyle::Monospace),
+                        );
+                    });
+
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("保存并关闭").clicked() {
+                            self.config.save();
+                            should_close = true;
+                        }
+                        ui.add_space(5.0);
+                        if ui.button("恢复默认").clicked() {
+                            self.config.prompt = AppConfig::default().prompt;
+                        }
+                    });
+                });
+            });
+
+        if should_close {
+            is_open = false;
+        }
+
+        self.show_prompt_editor = is_open;
     }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.render_prompt_editor(ctx);
         // 处理日志
         while let Ok(msg) = self.msg_receiver.try_recv() {
             match msg {
@@ -147,7 +182,8 @@ impl eframe::App for MyApp {
                     if self.logs.len() > 1000 {
                         self.logs.remove(0);
                     }
-                    if entry.message.contains("已完成") || entry.message.contains("任务终止") {
+                    if entry.message.contains("已完成") || entry.message.contains("任务终止")
+                    {
                         self.is_processing = false;
                         self.cancellation_token = None;
                     }
@@ -233,10 +269,7 @@ impl eframe::App for MyApp {
                     ui.label("输入路径:");
                     ui.horizontal(|ui| {
                         ui.text_edit_singleline(&mut self.config.input_path);
-                        if ui
-                            .button("📂 打开文件夹")
-                            .clicked()
-                        {
+                        if ui.button("📂 打开文件夹").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
                                 .set_directory(&mut self.config.input_path)
                                 .pick_folder()
@@ -270,16 +303,32 @@ impl eframe::App for MyApp {
                         }
                     });
                     ui.end_row();
-
-                    ui.horizontal(|ui| {
-                        ui.label("批大小:");
-                        ui.add(egui::DragValue::new(&mut self.config.batch_size).range(1..=1000)).on_hover_text("越大消耗越多，但准确性下降");
-                        ui.add_space(10.0);
-                        ui.checkbox(&mut self.config.skip_existing, "跳过已翻译的文件");
-                    });
-                    ui.end_row();
                 });
-
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .button("📝 编辑提示词")
+                    .on_hover_text("自定义发送给 AI 的系统提示词")
+                    .clicked()
+                {
+                    self.show_prompt_editor = true;
+                }
+                ui.separator();
+                ui.label("批大小:");
+                ui.add(egui::DragValue::new(&mut self.config.batch_size).range(1..=1000))
+                    .on_hover_text("越大消耗越多，但准确性下降");
+                ui.add_space(10.0);
+                ui.checkbox(&mut self.config.skip_existing, "跳过已翻译的文件");
+                ui.separator();
+                ui.label("超时时间:");
+                ui.add(
+                    egui::DragValue::new(&mut self.config.timeout)
+                        .range(10..=3600)
+                        .suffix("s"),
+                )
+                .on_hover_text("API 请求超时时间（秒）");
+            });
+            ui.end_row();
             ui.add_space(15.0);
 
             ui.horizontal(|ui| {
@@ -304,7 +353,8 @@ impl eframe::App for MyApp {
                             self.logs
                                 .push(LogEntry::new(LogLevel::Error, "请先填写 API Key"));
                         } else {
-                            self.logs.push(LogEntry::new(LogLevel::Info, "更新任务启动..."));
+                            self.logs
+                                .push(LogEntry::new(LogLevel::Info, "更新任务启动..."));
                             self.start_processing(true);
                         }
                     }
@@ -314,77 +364,47 @@ impl eframe::App for MyApp {
             ui.separator();
 
             ui.push_id("log_area", |ui| {
-                let mut style = (*ctx.style()).clone();
-                style.spacing.item_spacing = egui::vec2(1.0, 0.0);
-                ui.set_style(style);
-
+                ui.style_mut().spacing.item_spacing.y = 0.0;
                 egui::ScrollArea::vertical()
                     .stick_to_bottom(true)
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
-                        egui::Grid::new("log_grid")
-                            .num_columns(3)
-                            .spacing([5.0, 0.0]) // 列与列之间留出空隙，防止粘连
-                            .striped(true) // 斑马纹背景
-                            .show(ui, |ui| {
-                                for entry in &self.logs {
-                                    // 根据等级定义颜色
-                                    let (color, prefix) = match entry.level {
-                                        LogLevel::Info => (egui::Color32::from_gray(200), "INFO"),
-                                        LogLevel::Success => (egui::Color32::LIGHT_GREEN, "DONE"),
-                                        LogLevel::Warn => (egui::Color32::YELLOW, "WARN"),
-                                        LogLevel::Error => (egui::Color32::LIGHT_RED, "ERR "),
-                                    };
+                        for (i, entry) in self.logs.iter().enumerate() {
+                            let (color, prefix) = match entry.level {
+                                LogLevel::Info => (egui::Color32::from_gray(200), "INFO"),
+                                LogLevel::Success => (egui::Color32::LIGHT_GREEN, "DONE"),
+                                LogLevel::Warn => (egui::Color32::YELLOW, "WARN"),
+                                LogLevel::Error => (egui::Color32::LIGHT_RED, "ERR "),
+                            };
 
-                                    ui.with_layout(
-                                        egui::Layout::top_down(egui::Align::Min),
-                                        |ui| {
-                                            ui.style_mut().wrap_mode =
-                                                Some(egui::TextWrapMode::Extend);
-                                            ui.label(
-                                                egui::RichText::new(&entry.time)
-                                                    .color(egui::Color32::GRAY)
-                                                    .size(13.0)
-                                                    .monospace(),
-                                            );
-                                        },
-                                    );
+                            let bg_color = if i % 2 == 1 {
+                                egui::Color32::from_gray(30)
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            };
 
-                                    // --- 第二列：标签 [INFO] ---
-                                    ui.with_layout(
-                                        egui::Layout::top_down(egui::Align::Min),
-                                        |ui| {
-                                            ui.label(
-                                                egui::RichText::new(format!("[{}]", prefix))
-                                                    .color(color)
-                                                    .size(13.0)
-                                                    .strong() // 加粗
-                                                    .monospace(),
-                                            );
-                                        },
-                                    );
+                            let full_text =
+                                format!("{} [{}] {}", entry.time, prefix, entry.message);
 
-                                    // --- 第三列：具体内容 ---
-                                    ui.with_layout(
-                                        egui::Layout::top_down(egui::Align::Min),
-                                        |ui| {
-                                            let text = egui::RichText::new(&entry.message)
-                                                .color(color)
-                                                .size(13.0);
+                            let mut job = egui::text::LayoutJob::single_section(
+                                full_text,
+                                egui::TextFormat {
+                                    font_id: egui::FontId::monospace(13.0),
+                                    color,
+                                    ..Default::default()
+                                },
+                            );
+                            job.wrap.break_anywhere = true;
 
-                                            let text = if matches!(entry.level, LogLevel::Error) {
-                                                text.monospace()
-                                            } else {
-                                                text
-                                            };
+                            egui::Frame::new()
+                                .fill(bg_color)
+                                .inner_margin(2.0)
+                                .show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
 
-                                            ui.add(egui::Label::new(text).wrap())
-                                        },
-                                    );
-
-                                    ui.end_row(); // 结束这一行
-                                }
-                            });
+                                    ui.label(job);
+                                });
+                        }
                     });
             });
         });

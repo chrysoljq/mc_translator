@@ -1,3 +1,4 @@
+use crate::logic::common::TranslationContext;
 use crate::logic::openai::OpenAIClient;
 use crate::{log_err, log_info, log_success, log_warn};
 use std::path::Path;
@@ -7,6 +8,7 @@ use crate::logic::formats::{jar, lang, json, snbt};
 use tokio::task::JoinSet;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
+use crate::config::AppConfig;
 
 fn is_allowed_dir(entry: &DirEntry, root: &Path) -> bool {
     if !entry.file_type().is_dir() {
@@ -56,17 +58,15 @@ async fn dispatch_file(
     path: &Path,
     output: &str,
     client: &OpenAIClient,
-    batch_size: usize,
-    skip_existing: bool,
-    update_existing: bool,
+    ctx: Arc<TranslationContext>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     let ext = path.extension().unwrap_or_default().to_string_lossy();
     match ext.as_ref() {
-        "jar" => jar::process_jar(path, output, client, batch_size, skip_existing, update_existing, token).await,
-        "json" => json::process_json(path, output, client, batch_size, skip_existing, update_existing, token).await,
-        "lang" => lang::process_lang(path, output, client, batch_size, skip_existing, update_existing, token).await,
-        "snbt" => snbt::process_snbt(path, output, client, batch_size, skip_existing, token).await, 
+        "jar" => jar::process_jar(path, output, client, ctx, token).await,
+        "json" => json::process_json(path, output, client, ctx, token).await,
+        "lang" => lang::process_lang(path, output, client, ctx, token).await,
+        "snbt" => snbt::process_snbt(path, output, client, ctx, token).await, 
         _ => {
             log_warn!("跳过不支持的文件: {}", path.display());
             Ok(())
@@ -75,17 +75,18 @@ async fn dispatch_file(
 }
 
 pub async fn run_processing_task(
-    input: String,
-    output: String,
-    api_key: String,
-    base_url: String,
-    model: String,
-    batch_size: usize,
-    skip_existing: bool,
+    config: AppConfig,
     update_existing: bool,
     token: CancellationToken,
 ) {
-    let client = OpenAIClient::new(api_key, base_url, model);
+    let client = OpenAIClient::new(config.clone());
+    let ctx = Arc::new(TranslationContext{
+        batch_size: config.batch_size,
+        skip_existing: config.skip_existing,
+        update_existing: update_existing,
+    });
+    let input = config.input_path.clone();
+    let output = config.output_path.clone();
     let input_path = Path::new(&input);
 
     let file_semaphore = Arc::new(Semaphore::new(5)); // 文件并发数
@@ -96,9 +97,7 @@ pub async fn run_processing_task(
             input_path,
             &output,
             &client,
-            batch_size,
-            skip_existing,
-            update_existing,
+            ctx.clone(),
             &token,
         )
         .await
@@ -142,6 +141,7 @@ pub async fn run_processing_task(
                     let output = output.clone();
                     let token = token.clone();
                     let permit = file_semaphore.clone().acquire_owned().await.unwrap();
+                    let ctx = ctx.clone();
 
                     tasks.spawn(async move {
                         let _permit = permit; 
@@ -150,9 +150,7 @@ pub async fn run_processing_task(
                             &path, 
                             &output, 
                             &client, 
-                            batch_size, 
-                            skip_existing, 
-                            update_existing, 
+                            ctx,
                             &token
                         ).await {
                             log_warn!("[错误] 处理 {} 失败: {}", path.display(), e);

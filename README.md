@@ -1,16 +1,63 @@
-# mc_translator
+# MC Mod Translator (Minecraft 模组汉化助手)
 
-基于 AI 翻译的图形化工具，轻量、简洁。支持多种游戏资源文件格式的批量翻译。
-
-## 功能特性
-
-- AI 智能翻译
-- 支持 JAR、LANG、JSON 单文件翻译
-- 支持包含 JAR、LANG、JSON 文件夹的批量翻译
-- 输出标准资源文件目录结构
-
+基于 Rust 和 egui 构建的轻量级、高性能 Minecraft 模组 AI 翻译工具。支持多种格式的批量处理，利用 LLM (OpenAI 兼容接口) 进行上下文感知的智能汉化。
 ![alt text](image.png)
 
-## 许可证
+## ✨ 功能特性
 
-本项目采用 [GPL-3.0](LICENSE) 许可证。详见 [LICENSE](LICENSE) 文件。
+* **多格式全面支持**：
+  - 📦 **JAR**: 自动扫描 Mod 文件，读取内部 `en_us.json` 自动识别 ModID 并生成对应的汉化资源结构。
+  - 📄 **JSON**: 标准 Minecraft 语言文件翻译。
+  - 📝 **LANG**: 旧版 Minecraft 语言文件 (`.lang`) 支持。
+  - 📜 **SNBT**: 专为 **FTB Quests** 设计，智能提取任务标题、描述与副标题进行翻译，完美保留原有数据结构。
+
+
+* **🚀 高性能并发处理**：
+  - **多文件并行**：同时处理多个 Mod 或文件，充分利用网络带宽。
+  - **多批次并行**：大文件自动切分，多线程并发请求 API，大幅提升长文本翻译速度。
+
+
+* **智能翻译流程**：
+  - 🛡️ **格式保护**：自动识别并保留格式代码（如 `§a`, `%s`, `{{0}}`），防止破坏游戏内显示。
+  - 🔄 **增量更新**：支持"更新翻译"模式，读取旧汉化文件，仅翻译新增的条目，保留原有的人工校对内容。
+  - ⏭️ **智能跳过**：支持跳过已存在的文件，防止重复作业。
+
+
+* **现代图形界面 (GUI)**：
+  - 基于 `egui` 的跨平台界面，简洁直观。
+  - 实时日志反馈与进度监控。
+
+
+
+## 🛠️ 安装与构建
+
+### 预编译版本
+
+请前往 [Releases](https://github.com/chrysoljq/mc_translator/releases) 页面下载适用于 Windows / Linux / macOS 的最新版本。
+
+### 从源码构建
+可以通过 fork 本项目自动构建，也可以手动编译本项目：
+```bash
+# 1. 克隆仓库
+git clone https://github.com/chrysoljq/mc_translator.git
+cd mc_translator
+
+# 2. 编译发布版本
+cargo build --release
+```
+
+编译完成后，可执行文件位于 `target/release/` 目录下。
+
+## 📂 支持的目录结构
+程序会自动识别输入文件夹中的以下内容：
+* `*.jar` (自动解压读取)
+* `assets/*/lang/en_us.json`
+* `assets/*/lang/en_us.lang`
+* `kubejs/assets/*/lang/*.json`
+* `config/ftbquests/**/*.snbt` (任务文件)
+
+## 🤝 贡献
+欢迎提交 Issue 反馈 Bug 或提交 Pull Request 改进代码。
+
+## 📜 许可证
+本项目采用 **GPL-3.0** 许可证。详见 [LICENSE](https://www.google.com/search?q=LICENSE) 文件。

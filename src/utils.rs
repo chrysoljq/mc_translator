@@ -12,19 +12,42 @@ pub fn setup_custom_fonts(ctx: &egui::Context) {
         .family("SimHei")
         .build();
 
-    let (font_data, font_name) = match system_fonts::get(&sys_font_props) {
-        Some((data, _)) => (data, "system_font"),
-        #[allow(non_snake_case)]
-        None => return, // 未找到则使用默认
-    };
+    let mono_font_props = system_fonts::FontPropertyBuilder::new()
+        .family("Consolas")
+        .family("JetBrains Mono")
+        .family("Menlo")
+        .family("Monaco")
+        .family("Courier New")
+        .build();
 
-    fonts.font_data.insert(
-        font_name.to_owned(),
-        Arc::new(egui::FontData::from_owned(font_data)),
-    );
+    if let Some((data, _)) = system_fonts::get(&sys_font_props) {
+        fonts.font_data.insert(
+            "my_ui_font".to_owned(),
+            Arc::new(egui::FontData::from_owned(data)),
+        );
+        fonts.families.entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "my_ui_font".to_owned());
+    }
 
-    fonts.families.entry(egui::FontFamily::Proportional).or_default().insert(0, font_name.to_owned());
-    fonts.families.entry(egui::FontFamily::Monospace).or_default().insert(0, font_name.to_owned());
+    if let Some((data, _)) = system_fonts::get(&mono_font_props) {
+        fonts.font_data.insert(
+            "my_code_font".to_owned(),
+            Arc::new(egui::FontData::from_owned(data)),
+        );
+        fonts.families.entry(egui::FontFamily::Monospace)
+            .or_default()
+            .insert(0, "my_code_font".to_owned());
+    } else {
+        if fonts.font_data.contains_key("my_ui_font") {
+            fonts.families.entry(egui::FontFamily::Monospace)
+                .or_default()
+                .insert(0, "my_ui_font".to_owned());
+        }
+    }
 
+    if let Some(vec) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+        vec.push("my_ui_font".to_owned());
+    }
     ctx.set_fonts(fonts);
 }

@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::select;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
+use crate::config::AppConfig;
 
 const MAX_RETRIES: u32 = 5;
 
@@ -15,20 +16,22 @@ pub struct OpenAIClient {
     api_key: String,
     base_url: String,
     model: String,
+    prompt: String,
 }
 
 impl OpenAIClient {
-    pub fn new(api_key: String, base_url: String, model: String) -> Self {
+    pub fn new(config: AppConfig) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(600)) // 建议设为 60秒
+            .timeout(Duration::from_secs(config.timeout)) // 建议设为 60秒
             .build()
             .unwrap_or_default();
 
         Self {
             client,
-            api_key,
-            base_url: base_url.trim_end_matches('/').to_string(),
-            model,
+            api_key: config.api_key,
+            base_url: config.base_url.trim_end_matches('/').to_string(),
+            model: config.model,
+            prompt: config.prompt
         }
     }
 
@@ -197,18 +200,7 @@ impl OpenAIClient {
         mod_id: &str,
         token: &CancellationToken,
     ) -> Result<Vec<String>> {
-        let system_prompt = format!(
-            "你是一个《我的世界》(Minecraft) 模组本地化专家。当前模组 ID: 【{}】。\n\
-        我将发送一个包含英文原文的 JSON 字符串数组。\n\
-        请将数组中的每一项翻译为简体中文，并返回一个 JSON 字符串数组。\n\
-        \n\
-        要求：\n\
-        1. **严格保持顺序**：输出数组的第 N 项必须对应输入数组的第 N 项。\n\
-        2. **严格保持长度**：输出数组的元素数量必须与输入完全一致。\n\
-        3. 请严格保留格式代码（如 §a, %s, {{0}} 等）。\n\
-        4. 只返回纯净的 JSON 字符串，不要包含 Markdown 代码块标记。",
-            mod_id
-        );
+        let system_prompt = self.prompt.replace("{MOD_ID}", &mod_id);
 
         let request_body = json!({
             "model": self.model,
