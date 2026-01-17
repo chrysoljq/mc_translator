@@ -26,7 +26,7 @@ impl Default for AppConfig {
             batch_size: 200,
             skip_existing: true,
             timeout: 240,
-            prompt: "(WIP)You are a Minecraft Mod localization Expert".to_string(), // TODO
+            prompt: "(WIP)You are a Minecraft Mod Localization Expert".to_string(), // TODO
         }
     }
 }
