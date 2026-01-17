@@ -26,7 +26,7 @@ impl Default for AppConfig {
             model: "gpt-3.5-turbo".to_string(), 
             batch_size: 200,
             skip_existing: true,
-            timeout: 240,
+            timeout: 600,
             prompt: "(WIP)You are a Minecraft Mod Localization Expert".to_string(), // TODO
         }
     }
