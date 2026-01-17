@@ -196,7 +196,8 @@ pub fn write_map_to_file(
         FileFormat::Lang => {
             for (k, v) in map {
                 if let Some(str_val) = v.as_str() {
-                    writeln!(file, "{}={}", k, str_val)?;
+                    let escaped_val = str_val.replace('\n', "\\n").replace('\r', ""); // 处理换行符
+                    writeln!(file, "{}={}", k, escaped_val)?;
                 }
             }
         }

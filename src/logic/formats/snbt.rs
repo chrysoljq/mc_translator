@@ -107,10 +107,12 @@ pub async fn process_snbt(
     let mut new_content = content.clone();
     for (range, key) in replacements {
         if let Some(trans_val) = translated_map.get(&key).and_then(|v| v.as_str()) {
+            let escaped_json_string = serde_json::to_string(trans_val).unwrap_or_default();
             // 仅当翻译结果不为空时替换
-            if !trans_val.trim().is_empty() {
-                new_content.replace_range(range, trans_val);
-            }
+            if escaped_json_string.len() >= 2 {
+                    let inner_content = &escaped_json_string[1..escaped_json_string.len() - 1];
+                    new_content.replace_range(range, inner_content);
+                }
         }
     }
 
