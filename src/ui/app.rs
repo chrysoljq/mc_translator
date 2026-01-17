@@ -77,7 +77,7 @@ impl MyApp {
         });
     }
 
-    fn start_processing(&mut self) {
+    fn start_processing(&mut self, is_update: bool) {
         if self.is_processing {
             return;
         }
@@ -99,6 +99,7 @@ impl MyApp {
         self.cancellation_token = Some(token.clone());
         
         let sender = self.msg_sender.clone();
+        let completion_msg = if is_update { "更新任务已完成" } else { "任务已完成" };
 
         thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
@@ -115,12 +116,13 @@ impl MyApp {
                     model,
                     batch_size,
                     skip_existing,
+                    is_update,
                     token,
                 )
                 .await;
                 let _ = sender.send(AppMsg::Log(LogEntry::new(
                     LogLevel::Info,
-                    "任务已完成",
+                    completion_msg,
                 )));
             });
         });
@@ -153,7 +155,7 @@ impl eframe::App for MyApp {
                 }
                 AppMsg::ModelsFetched(models) => {
                     self.available_models = models;
-                    // 如果当前配置的模型不在列表里，默认选中第一个（可选逻辑）
+                    // 如果当前配置的模型不在列表里，默认选中第一个
                     if !self.available_models.contains(&self.config.model)
                         && !self.available_models.is_empty()
                     {
@@ -244,15 +246,15 @@ impl eframe::App for MyApp {
                             }
                         }
                         // 没必要了
-                        // if ui.button("📄 打开文件").on_hover_text("选择单个汉化文件").clicked() {
-                        //     if let Some(file) = rfd::FileDialog::new()
-                        //         .add_filter("Minecraft Mod", &["jar", "json", "lang"])
-                        //         .set_directory(&mut self.config.input_path)
-                        //         .pick_file()
-                        //     {
-                        //         self.config.input_path = file.display().to_string();
-                        //     }
-                        // }
+                        if ui.button("📄 打开文件").on_hover_text("选择单个汉化文件").clicked() {
+                            if let Some(file) = rfd::FileDialog::new()
+                                .add_filter("Minecraft Mod", &["jar", "json", "lang"])
+                                .set_directory(&mut self.config.input_path)
+                                .pick_file()
+                            {
+                                self.config.input_path = file.display().to_string();
+                            }
+                        }
                     });
                     ui.end_row();
 
@@ -295,7 +297,16 @@ impl eframe::App for MyApp {
                                 .push(LogEntry::new(LogLevel::Error, "请先填写 API Key"));
                         } else {
                             self.logs.push(LogEntry::new(LogLevel::Info, "任务启动..."));
-                            self.start_processing();
+                            self.start_processing(false);
+                        }
+                    }
+                    if ui.button("🔄 更新翻译").clicked() {
+                        if self.config.api_key.is_empty() {
+                            self.logs
+                                .push(LogEntry::new(LogLevel::Error, "请先填写 API Key"));
+                        } else {
+                            self.logs.push(LogEntry::new(LogLevel::Info, "更新任务启动..."));
+                            self.start_processing(true);
                         }
                     }
                 }

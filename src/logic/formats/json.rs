@@ -12,6 +12,7 @@ pub async fn process_json(
     client: &OpenAIClient,
     batch_size: usize,
     skip_existing: bool,
+    update_existing: bool,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     log_info!("处理 JSON 文件: {}", file_path.display());
@@ -35,7 +36,7 @@ pub async fn process_json(
         .join("lang")
         .join(new_name);
 
-    if skip_existing && final_path.exists() {
+    if !update_existing && skip_existing && final_path.exists() {
         log_success!("跳过已存在: {:?}", final_path);
         return Ok(());
     }
@@ -43,14 +44,45 @@ pub async fn process_json(
     let content = fs::read_to_string(file_path)?;
     let json_data: serde_json::Value = serde_json::from_str(&content)?;
 
-    if let serde_json::Value::Object(map) = json_data {
-        let final_map =
-            execute_translation_batches(&map, client, &mod_id, batch_size, &token).await;
+    if let serde_json::Value::Object(src_map) = json_data {
+        // 准备待翻译的数据
+        let (map_to_translate, mut base_map) = if update_existing && final_path.exists() {
+            let existing_content = fs::read_to_string(&final_path).unwrap_or_default();
+            let existing_json: serde_json::Value = serde_json::from_str(&existing_content)
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
 
-        // 检查是否被取消，如果被取消则不保存
+            if let serde_json::Value::Object(existing_map) = existing_json {
+                let mut pending_map = serde_json::Map::new();
+                for (k, v) in &src_map {
+                    if !existing_map.contains_key(k) {
+                        pending_map.insert(k.clone(), v.clone());
+                    }
+                }
+                
+                if pending_map.is_empty() {
+                    log_info!("没有检测到新增条目，无需更新: {:?}", final_path);
+                    return Ok(());
+                }
+                
+                log_info!("增量更新检测到 {} 个新条目: {:?}", pending_map.len(), final_path);
+                (pending_map, existing_map)
+            } else {
+                (src_map.clone(), serde_json::Map::new())
+            }
+        } else {
+            (src_map.clone(), serde_json::Map::new())
+        };
+
+        let translated_part =
+            execute_translation_batches(&map_to_translate, client, &mod_id, batch_size, &token).await;
+
         if token.is_cancelled() {
             log_info!("任务已取消，放弃保存 JSON 文件: {:?}", final_path);
             return Ok(());
+        }
+
+        for (k, v) in translated_part {
+            base_map.insert(k, v);
         }
 
         if let Some(parent) = final_path.parent() {
@@ -58,10 +90,15 @@ pub async fn process_json(
         }
 
         let mut out_file = fs::File::create(&final_path)?;
-        let out_json = serde_json::to_string_pretty(&final_map)?;
+        let out_json = serde_json::to_string_pretty(&base_map)?;
         out_file.write_all(out_json.as_bytes())?;
 
-        log_success!("JSON 翻译完成 (ModID: {}): {:?}", mod_id, final_path);
+        if update_existing && final_path.exists() {
+            log_success!("JSON 更新完成 (ModID: {}): {:?}", mod_id, final_path);
+        } else {
+            log_success!("JSON 翻译完成 (ModID: {}): {:?}", mod_id, final_path);
+        }
+
     } else {
         log_warn!("JSON 格式错误，根节点必须是对象: {}", file_path.display());
     }

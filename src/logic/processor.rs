@@ -54,13 +54,14 @@ async fn dispatch_file(
     client: &OpenAIClient,
     batch_size: usize,
     skip_existing: bool,
+    update_existing: bool,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     let ext = path.extension().unwrap_or_default().to_string_lossy();
     match ext.as_ref() {
-        "jar" => jar::process_jar(path, output, client, batch_size, skip_existing, token).await,
-        "json" => json::process_json(path, output, client, batch_size, skip_existing, token).await,
-        "lang" => lang::process_lang(path, output, client, batch_size, skip_existing, token).await,
+        "jar" => jar::process_jar(path, output, client, batch_size, skip_existing, update_existing, token).await,
+        "json" => json::process_json(path, output, client, batch_size, skip_existing, update_existing, token).await,
+        "lang" => lang::process_lang(path, output, client, batch_size, skip_existing, update_existing, token).await,
         "snbt" => snbt::process_snbt(path, output, client, batch_size, skip_existing, token).await, 
         _ => {
             log_warn!("跳过不支持的文件: {}", path.display());
@@ -77,6 +78,7 @@ pub async fn run_processing_task(
     model: String,
     batch_size: usize,
     skip_existing: bool,
+    update_existing: bool,
     token: CancellationToken,
 ) {
     let client = OpenAIClient::new(api_key, base_url, model);
@@ -89,6 +91,7 @@ pub async fn run_processing_task(
             &client,
             batch_size,
             skip_existing,
+            update_existing,
             &token,
         )
         .await
@@ -123,7 +126,7 @@ pub async fn run_processing_task(
 
                 if should_process {
                     if let Err(e) =
-                        dispatch_file(path, &output, &client, batch_size, skip_existing, &token)
+                        dispatch_file(path, &output, &client, batch_size, skip_existing, update_existing, &token)
                             .await
                     {
                         log_warn!("[错误] 处理 {} 失败: {}", path.display(), e);
