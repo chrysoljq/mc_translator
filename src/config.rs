@@ -34,7 +34,7 @@ impl Default for AppConfig {
 
 impl AppConfig {
     fn config_path() -> PathBuf {
-        PathBuf::from("config.json")
+        PathBuf::from("MC_Translator/config.json")
     }
 
     pub fn load() -> Self {
