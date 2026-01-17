@@ -4,10 +4,7 @@ mod config;
 mod utils;
 mod logging;
 mod message;
-mod logic {
-    pub mod openai;
-    pub mod processor;
-}
+mod logic;
 mod ui {
     pub mod app;
 }

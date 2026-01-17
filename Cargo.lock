@@ -2270,6 +2270,7 @@ dependencies = [
  "env_logger",
  "font-loader",
  "log",
+ "regex",
  "reqwest",
  "rfd",
  "serde",
