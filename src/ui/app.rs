@@ -205,7 +205,7 @@ impl eframe::App for MyApp {
         egui::TopBottomPanel::bottom("footer_panel").show(ctx, |ui| {
             ui.add_space(2.0);
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("v0.2.5").weak().size(10.0));
+                ui.label(egui::RichText::new("v0.2.6").weak().size(10.0));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.hyperlink_to(
                         egui::RichText::new("GitHub 主页").size(11.0),
