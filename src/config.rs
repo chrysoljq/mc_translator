@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub model: String,
     pub batch_size: usize,
     pub skip_existing: bool,
+    pub timeout: usize,
+    pub prompt: String,
 }
 
 impl Default for AppConfig {
@@ -23,6 +25,8 @@ impl Default for AppConfig {
             model: "gpt-3.5-turbo".to_string(), 
             batch_size: 200,
             skip_existing: true,
+            timeout: 240,
+            prompt: "(WIP)You are a Minecraft Mod localization Expert".to_string(), // TODO
         }
     }
 }

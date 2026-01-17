@@ -1,47 +1,76 @@
 use crate::logic::openai::OpenAIClient;
 use crate::{log_info, log_warn};
-use tokio_util::sync::CancellationToken;
+use serde_json::{Map, Value};
 use std::path::Path;
+use tokio_util::sync::CancellationToken;
 
 pub async fn execute_translation_batches(
-    map: &serde_json::Map<String, serde_json::Value>,
+    map: &Map<String, Value>,
     client: &OpenAIClient,
-    mod_id: &str,
+    context_id: &str,
     batch_size: usize,
     token: &CancellationToken,
-) -> serde_json::Map<String, serde_json::Value> {
-    let safe_batch_size = if batch_size == 0 { 1 } else { batch_size };
-    let total_items = map.len();
-    let keys: Vec<String> = map.keys().cloned().collect();
-    let mut final_map = serde_json::Map::new();
+) -> Map<String, Value> {
+    let safe_batch_size = if batch_size == 0 { 20 } else { batch_size };
 
-    for (idx, chunk) in keys.chunks(safe_batch_size).enumerate() {
+    let pending_items: Vec<(&String, &String)> = map
+        .iter()
+        .filter_map(|(k, v)| {
+            if let Value::String(s) = v {
+                if !s.trim().is_empty() {
+                    return Some((k, s));
+                }
+            }
+            None
+        })
+        .collect();
+
+    let total_items = pending_items.len();
+    let mut final_map = map.clone();
+
+    if total_items == 0 {
+        return final_map;
+    }
+
+    // 分批处理
+    for (batch_idx, chunk) in pending_items.chunks(safe_batch_size).enumerate() {
         if token.is_cancelled() {
             break;
         }
+
         log_info!(
-            "正在翻译 [{}] 第 {}/{} 批 (共 {} 条)",
-            mod_id,
-            idx + 1,
+            "[{}] 批次 {}/{} ({} 条目)",
+            context_id,
+            batch_idx + 1,
             (total_items + safe_batch_size - 1) / safe_batch_size,
-            total_items
+            chunk.len()
         );
 
-        let mut sub_map = serde_json::Map::new();
-        for k in chunk {
-            if let Some(v) = map.get(k) {
-                sub_map.insert(k.clone(), v.clone());
-            }
-        }
+        let source_texts: Vec<String> = chunk.iter().map(|(_, v)| v.to_string()).collect();
 
-        match client.translate_batch(sub_map.clone(), mod_id, token).await {
-            Ok(translated) => final_map.extend(translated),
+        let translated_texts = match client
+            .translate_text_list(source_texts, context_id, token)
+            .await
+        {
+            Ok(t) => t,
             Err(e) => {
-                log_warn!("批次失败保留原文: {}", e);
-                final_map.extend(sub_map); // 失败回退
+                log_warn!("批次翻译失败: {}", e);
+                continue;
             }
+        };
+
+        if translated_texts.len() == chunk.len() {
+            for (i, (original_key, _)) in chunk.iter().enumerate() {
+                final_map.insert(
+                    (*original_key).clone(),
+                    Value::String(translated_texts[i].clone()),
+                );
+            }
+        } else {
+            log_warn!("警告: AI 返回的数组长度不匹配，跳过此批次回填");
         }
     }
+
     final_map
 }
 
@@ -61,4 +90,3 @@ pub fn extract_mod_id(path: &Path) -> String {
         .to_string_lossy()
         .to_string()
 }
-

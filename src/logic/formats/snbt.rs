@@ -17,10 +17,6 @@ pub async fn process_snbt(
 ) -> anyhow::Result<()> {
     log_info!("处理 SNBT 任务文件: {}", file_path.display());
 
-    // 1. 确定输出路径
-    // 保持相对路径结构，例如 config/ftbquests/... -> output/config/ftbquests/...
-    // 这里简单地保留文件名，实际使用中最好保留相对于 input 的目录结构，这里假设用户会处理目录结构
-    // 为简单起见，这里复用 extract_mod_id 逻辑或者直接映射
     let file_stem = file_path.file_stem().unwrap_or_default().to_string_lossy();
     // 任务文件通常不需要改名为 zh_cn，而是直接替换内容，建议输出到同名文件
     let output_path = Path::new(output_root).join(file_path.file_name().unwrap());
@@ -32,12 +28,10 @@ pub async fn process_snbt(
 
     let content = fs::read_to_string(file_path)?;
 
-    // 2. 正则提取：仅提取 title, subtitle 和 description 中的文本
-    // 使用 Map<索引String, 原文String> 来发送给 AI，极度节省 Token
+    // 正则提取：仅提取 title, subtitle 和 description 中的文本
     let mut extracted_map = serde_json::Map::new();
     let mut replacements = Vec::new(); // 存储 (Range, KeyIndex) 以便回填
 
-    // 预编译正则
     // 匹配 title: "..." 或 subtitle: "..."
     let re_kv = Regex::new(r#"(title|subtitle)\s*:\s*"((?:[^"\\]|\\.)*)""#).unwrap();
     // 匹配 description: [ ... ] 块
@@ -50,7 +44,6 @@ pub async fn process_snbt(
     // 提取 Title/Subtitle
     for caps in re_kv.captures_iter(&content) {
         if let Some(val_match) = caps.get(2) {
-            // 过滤空字符串或纯符号
             if val_match.as_str().trim().is_empty() || !val_match.as_str().chars().any(|c| c.is_alphabetic()) {
                 continue;
             }
@@ -91,7 +84,6 @@ pub async fn process_snbt(
 
     log_info!("提取到 {} 条条目，开始翻译...", extracted_map.len());
 
-    // 3. 调用 AI 翻译 (复用现有的 batch 逻辑)
     // 这里 mod_id 传入 "ftbquests" 或文件名作为标识
     let translated_map = execute_translation_batches(
         &extracted_map, 
@@ -105,8 +97,7 @@ pub async fn process_snbt(
         return Ok(());
     }
 
-    // 4. 回填内容 (从后往前替换，避免破坏索引)
-    // 根据 Range 的 start 从大到小排序
+    // 回填内容，根据 Range 的 start 从大到小排序
     replacements.sort_by(|a, b| b.0.start.cmp(&a.0.start));
 
     let mut new_content = content.clone();
@@ -119,7 +110,7 @@ pub async fn process_snbt(
         }
     }
 
-    // 5. 保存
+    // 保存
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)?;
     }
