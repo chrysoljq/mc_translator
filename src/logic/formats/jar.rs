@@ -1,11 +1,11 @@
-use std::path::Path;
-use std::fs;
-use tokio_util::sync::CancellationToken;
-use crate::logic::openai::OpenAIClient;
 use crate::logic::common::execute_translation_batches;
-use crate::{log_info, log_warn, log_success};
-use zip::ZipArchive;
+use crate::logic::openai::OpenAIClient;
+use crate::{log_info, log_success, log_warn};
+use std::fs;
 use std::io::{Read, Write};
+use std::path::Path;
+use tokio_util::sync::CancellationToken;
+use zip::ZipArchive;
 
 pub async fn process_jar(
     jar_path: &Path,
@@ -43,15 +43,22 @@ pub async fn process_jar(
 
         // 从 zip 内部路径提取 modid
         let parts: Vec<&str> = target_path.split('/').collect();
+        let assets_index = parts.iter().position(|&x| x == "assets");
         let mod_id = parts
             .iter()
             .position(|&x| x == "assets")
             .and_then(|i| parts.get(i + 1))
             .unwrap_or(&"unknown");
 
-        let out_sub_path = target_path.replace("en_us.json", "zh_cn.json");
+        let out_sub_path = if let Some(idx) = assets_index {
+            let relative_path = parts[idx..].join("/");
+            relative_path.replace("en_us.json", "zh_cn.json")
+        } else {
+            target_path.replace("en_us.json", "zh_cn.json")
+        };
+
         let final_path = Path::new(output_root).join(out_sub_path);
-        if skip_existing && final_path.exists() {
+        if !update_existing && skip_existing && final_path.exists() {
             log_info!("跳过已存在的文件: {} -> {:?}", target_path, final_path);
             continue;
         }
@@ -84,8 +91,12 @@ pub async fn process_jar(
                         log_info!("没有检测到新增条目，无需更新: {:?}", final_path);
                         continue;
                     }
-                    
-                    log_info!("增量更新检测到 {} 个新条目 (ModID: {})", pending_map.len(), mod_id);
+
+                    log_info!(
+                        "增量更新检测到 {} 个新条目 (ModID: {})",
+                        pending_map.len(),
+                        mod_id
+                    );
                     (pending_map, existing_map)
                 } else {
                     (src_map.clone(), serde_json::Map::new())
@@ -95,7 +106,8 @@ pub async fn process_jar(
             };
 
             let translated_part =
-                execute_translation_batches(&map_to_translate, client, mod_id, batch_size, &token).await;
+                execute_translation_batches(&map_to_translate, client, mod_id, batch_size, &token)
+                    .await;
 
             if token.is_cancelled() {
                 log_info!("任务已取消，放弃保存 JAR 导出文件: {:?}", final_path);
@@ -115,9 +127,9 @@ pub async fn process_jar(
             out_file.write_all(out_json.as_bytes())?;
 
             if update_existing && final_path.exists() {
-                 log_success!("JAR 导出更新完成: {:?}", final_path);
+                log_success!("JAR 导出更新完成: {:?}", final_path);
             } else {
-                 log_success!("JAR 导出生成完成: {:?}", final_path);
+                log_success!("JAR 导出生成完成: {:?}", final_path);
             }
         }
     }

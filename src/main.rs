@@ -17,7 +17,7 @@ fn main() -> eframe::Result {
 
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([730.0, 500.0])
+            .with_inner_size([810.0, 500.0])
             .with_title("MC Mod Translator"),
         ..Default::default()
     };
