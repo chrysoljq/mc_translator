@@ -19,27 +19,27 @@ pub fn send_log(level: LogLevel, msg: String) {
 #[macro_export]
 macro_rules! log_info {
     ($($arg:tt)*) => {
-        $crate::message::send_log($crate::logging::LogLevel::Info, format!($($arg)*));
+        $crate::message::send_log($crate::logging::LogLevel::Info, format!($($arg)*))
     }
 }
 
 #[macro_export]
 macro_rules! log_err {
     ($($arg:tt)*) => {
-        $crate::message::send_log($crate::logging::LogLevel::Error, format!($($arg)*));
+        $crate::message::send_log($crate::logging::LogLevel::Error, format!($($arg)*))
     }
 }
 
 #[macro_export]
 macro_rules! log_success {
     ($($arg:tt)*) => {
-        $crate::message::send_log($crate::logging::LogLevel::Success, format!($($arg)*));
+        $crate::message::send_log($crate::logging::LogLevel::Success, format!($($arg)*))
     }
 }
 
 #[macro_export]
 macro_rules! log_warn {
     ($($arg:tt)*) => {
-        $crate::message::send_log($crate::logging::LogLevel::Warn, format!($($arg)*));
+        $crate::message::send_log($crate::logging::LogLevel::Warn, format!($($arg)*))
     }
 }

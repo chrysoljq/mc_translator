@@ -9,6 +9,7 @@ use tokio_util::sync::CancellationToken;
 
 const MAX_RETRIES: u32 = 5;
 
+#[derive(Clone)]
 pub struct OpenAIClient {
     client: Client,
     api_key: String,

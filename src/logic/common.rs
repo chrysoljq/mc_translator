@@ -1,11 +1,14 @@
 use crate::logic::openai::OpenAIClient;
 use crate::{log_info, log_warn};
-use serde_json::{Map, Value};
-use std::path::{Path};
-use tokio_util::sync::CancellationToken;
 use anyhow::Result;
+use serde_json::{Map, Value};
 use std::fs;
-use std::io::{Write, BufReader, BufRead};
+use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
+use tokio_util::sync::CancellationToken;
+use tokio::task::JoinSet;
+use tokio::sync::Semaphore;
+use std::sync::Arc;
 
 pub async fn execute_translation_batches(
     map: &Map<String, Value>,
@@ -35,42 +38,62 @@ pub async fn execute_translation_batches(
         return final_map;
     }
 
-    // 分批处理
+    // 限制单个文件内的并发请求数（例如同时处理 10 个批次）
+    let batch_semaphore = Arc::new(Semaphore::new(5));
+    let mut tasks = JoinSet::new();
+
+    // 分批并创建异步任务
     for (batch_idx, chunk) in pending_items.chunks(safe_batch_size).enumerate() {
         if token.is_cancelled() {
             break;
         }
 
+        let source_texts: Vec<String> = chunk.iter().map(|(_, v)| v.to_string()).collect();
+        let original_keys: Vec<String> = chunk.iter().map(|(k, _)| (*k).clone()).collect();
+        
+        let client = client.clone();
+        let context_id = context_id.to_string();
+        let token = token.clone();
+        let permit = batch_semaphore.clone().acquire_owned().await.unwrap();
+        
+        let chunk_len = chunk.len();
+        let total_batches = (total_items + safe_batch_size - 1) / safe_batch_size;
+
         log_info!(
-            "[{}] 批次 {}/{} ({} 条目)",
+            "[{}] 准备批次 {}/{} ({} 条目)",
             context_id,
             batch_idx + 1,
-            (total_items + safe_batch_size - 1) / safe_batch_size,
-            chunk.len()
+            total_batches,
+            chunk_len
         );
 
-        let source_texts: Vec<String> = chunk.iter().map(|(_, v)| v.to_string()).collect();
-
-        let translated_texts = match client
-            .translate_text_list(source_texts, context_id, token)
-            .await
-        {
-            Ok(t) => t,
-            Err(e) => {
-                log_warn!("批次翻译失败: {}", e);
-                continue;
+        tasks.spawn(async move {
+            let _permit = permit; // 任务结束时自动释放信号量
+            
+            // 执行翻译请求
+            match client.translate_text_list(source_texts, &context_id, &token).await {
+                Ok(translated_texts) => {
+                    if translated_texts.len() == chunk_len {
+                        Some((original_keys, translated_texts))
+                    } else {
+                        log_warn!("警告: [{}] 批次 {} 返回数量不匹配，跳过回填", context_id, batch_idx + 1);
+                        None
+                    }
+                }
+                Err(e) => {
+                    log_warn!("批次翻译失败: {}", e);
+                    None
+                }
             }
-        };
+        });
+    }
 
-        if translated_texts.len() == chunk.len() {
-            for (i, (original_key, _)) in chunk.iter().enumerate() {
-                final_map.insert(
-                    (*original_key).clone(),
-                    Value::String(translated_texts[i].clone()),
-                );
+    // 收集所有任务结果并回填到 Map 中
+    while let Some(res) = tasks.join_next().await {
+        if let Ok(Some((keys, texts))) = res {
+            for (key, text) in keys.iter().zip(texts.iter()) {
+                final_map.insert(key.clone(), Value::String(text.clone()));
             }
-        } else {
-            log_warn!("警告: AI 返回的数组长度不匹配，跳过此批次回填");
         }
     }
 
@@ -85,9 +108,10 @@ pub fn extract_mod_id(path: &Path) -> String {
     if let Some(idx) = parts.iter().position(|x| x == "lang") {
         if idx > 0 {
             return parts[idx - 1].to_string();
+        } else {
+            log_warn!("发现无法解析的模组：{:?}", path);
         }
     }
-
     path.file_stem()
         .unwrap_or_default()
         .to_string_lossy()
@@ -113,14 +137,18 @@ pub fn get_target_filename(original_name: &str) -> String {
     }
 }
 
-pub fn read_map_from_file(path: &Path, format: FileFormat) -> Result<Map<String, serde_json::Value>> {
+pub fn read_map_from_file(
+    path: &Path,
+    format: FileFormat,
+) -> Result<Map<String, serde_json::Value>> {
     if !path.exists() {
         return Ok(Map::new());
     }
     match format {
         FileFormat::Json => {
             let content = fs::read_to_string(path)?;
-            let json: serde_json::Value = serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(Map::new()));
+            let json: serde_json::Value =
+                serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(Map::new()));
             Ok(json.as_object().cloned().unwrap_or_default())
         }
         FileFormat::Lang => {
@@ -129,9 +157,14 @@ pub fn read_map_from_file(path: &Path, format: FileFormat) -> Result<Map<String,
             let mut map = Map::new();
             for line in reader.lines() {
                 let line = line?;
-                if line.trim().is_empty() || line.trim().starts_with('#') { continue; }
+                if line.trim().is_empty() || line.trim().starts_with('#') {
+                    continue;
+                }
                 if let Some((k, v)) = line.split_once('=') {
-                    map.insert(k.trim().to_string(), serde_json::Value::String(v.trim().to_string()));
+                    map.insert(
+                        k.trim().to_string(),
+                        serde_json::Value::String(v.trim().to_string()),
+                    );
                 }
             }
             Ok(map)
@@ -139,12 +172,16 @@ pub fn read_map_from_file(path: &Path, format: FileFormat) -> Result<Map<String,
     }
 }
 
-pub fn write_map_to_file(path: &Path, map: &Map<String, serde_json::Value>, format: FileFormat) -> Result<()> {
+pub fn write_map_to_file(
+    path: &Path,
+    map: &Map<String, serde_json::Value>,
+    format: FileFormat,
+) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
     let mut file = fs::File::create(path)?;
-    
+
     match format {
         FileFormat::Json => {
             serde_json::to_writer_pretty(file, map)?;
@@ -188,7 +225,7 @@ pub async fn core_translation_pipeline(
     let (map_to_translate, mut base_map) = if update_existing && final_path.exists() {
         // [更新模式]
         let existing_map = read_map_from_file(&final_path, format).unwrap_or_default();
-        
+
         let mut pending = serde_json::Map::new();
         for (k, v) in &src_map {
             if !existing_map.contains_key(k) {
@@ -201,11 +238,17 @@ pub async fn core_translation_pipeline(
             return Ok(());
         }
 
-        log_info!("增量更新检测到 {} 个新条目 (ModID: {})", pending.len(), mod_id);
+        log_info!(
+            "增量更新检测到 {} 个新条目 (ModID: {})",
+            pending.len(),
+            mod_id
+        );
 
         // [保存增量原始内容]
         let raw_dir = output_root.join("raw_content");
-        if !raw_dir.exists() { fs::create_dir_all(&raw_dir)?; }
+        if !raw_dir.exists() {
+            fs::create_dir_all(&raw_dir)?;
+        }
         // 文件名增加 hash 或 timestamp 防止覆盖？这里暂时用 modid+filename
         let raw_path = raw_dir.join(format!("{}_{}", mod_id, original_filename));
         let raw_file = fs::File::create(&raw_path)?;
@@ -218,7 +261,8 @@ pub async fn core_translation_pipeline(
         (src_map, serde_json::Map::new())
     };
 
-    let translated_part = execute_translation_batches(&map_to_translate, client, mod_id, batch_size, token).await;
+    let translated_part =
+        execute_translation_batches(&map_to_translate, client, mod_id, batch_size, token).await;
 
     if token.is_cancelled() {
         log_warn!("任务取消，放弃保存: {:?}", final_path);
@@ -231,7 +275,11 @@ pub async fn core_translation_pipeline(
 
     write_map_to_file(&final_path, &base_map, format)?;
 
-    let action_str = if update_existing && final_path.exists() { "更新" } else { "生成" };
+    let action_str = if update_existing && final_path.exists() {
+        "更新"
+    } else {
+        "生成"
+    };
     log_info!("{} 完成 (ModID: {}): {:?}", action_str, mod_id, final_path);
 
     Ok(())

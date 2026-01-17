@@ -4,6 +4,9 @@ use std::path::Path;
 use tokio_util::sync::CancellationToken;
 use walkdir::{DirEntry, WalkDir};
 use crate::logic::formats::{jar, lang, json, snbt};
+use tokio::task::JoinSet;
+use tokio::sync::Semaphore;
+use std::sync::Arc;
 
 fn is_allowed_dir(entry: &DirEntry, root: &Path) -> bool {
     if !entry.file_type().is_dir() {
@@ -85,6 +88,9 @@ pub async fn run_processing_task(
     let client = OpenAIClient::new(api_key, base_url, model);
     let input_path = Path::new(&input);
 
+    let file_semaphore = Arc::new(Semaphore::new(5)); // 文件并发数
+    let mut tasks = JoinSet::new();
+
     let result = if input_path.is_file() {
         dispatch_file(
             input_path,
@@ -106,7 +112,9 @@ pub async fn run_processing_task(
                 log_info!("任务已停止");
                 break;
             }
-            let path = entry.path();
+            
+            let path = entry.path().to_path_buf(); // 获取路径的所有权
+            
             if path.is_file() {
                 let ext = path
                     .extension()
@@ -130,26 +138,37 @@ pub async fn run_processing_task(
                 };
 
                 if should_process {
-                    if let Err(e) =
-                        dispatch_file(path, &output, &client, batch_size, skip_existing, update_existing, &token)
-                            .await
-                    {
-                        log_warn!("[错误] 处理 {} 失败: {}", path.display(), e);
-                    }
+                    let client = client.clone();
+                    let output = output.clone();
+                    let token = token.clone();
+                    let permit = file_semaphore.clone().acquire_owned().await.unwrap();
+
+                    tasks.spawn(async move {
+                        let _permit = permit; 
+                        
+                        if let Err(e) = dispatch_file(
+                            &path, 
+                            &output, 
+                            &client, 
+                            batch_size, 
+                            skip_existing, 
+                            update_existing, 
+                            &token
+                        ).await {
+                            log_warn!("[错误] 处理 {} 失败: {}", path.display(), e);
+                        }
+                    });
                 }
             }
         }
+        while let Some(_) = tasks.join_next().await {}
         Ok(())
     } else {
         Err(anyhow::anyhow!("无效的输入路径"))
     };
 
     match result {
-        Ok(_) => {
-            log_success!("任务已完成！");
-        }
-        Err(e) => {
-            log_err!("发生严重错误: {}", e);
-        }
+        Ok(_) => log_success!("任务已完成！"),
+        Err(e) => log_err!("发生严重错误: {}", e),
     }
 }
