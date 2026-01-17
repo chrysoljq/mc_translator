@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
 use regex::Regex;
@@ -18,8 +18,12 @@ pub async fn process_snbt(
     log_info!("处理 SNBT 任务文件: {}", file_path.display());
 
     let file_stem = file_path.file_stem().unwrap_or_default().to_string_lossy();
-    // 任务文件通常不需要改名为 zh_cn，而是直接替换内容，建议输出到同名文件
-    let output_path = Path::new(output_root).join(file_path.file_name().unwrap());
+    let output_path = if let Some(idx) = file_path.components().position(|c| c.as_os_str() == "config") {
+        let relative_path: PathBuf = file_path.components().skip(idx).collect();
+        Path::new(output_root).join(relative_path)
+    } else {
+        Path::new(output_root).join(file_path.file_name().unwrap())
+    };
 
     if skip_existing && output_path.exists() {
         log_success!("跳过已存在的文件: {:?}", output_path);

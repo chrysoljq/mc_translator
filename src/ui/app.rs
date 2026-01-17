@@ -188,7 +188,7 @@ impl eframe::App for MyApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Minecraft Mod 汉化助手");
+            ui.heading("Minecraft Mod 汉化助手（支持任务、模组、资源包）");
             ui.separator();
 
             egui::Grid::new("settings_grid")

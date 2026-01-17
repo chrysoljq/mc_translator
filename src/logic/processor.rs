@@ -22,6 +22,7 @@ fn is_allowed_dir(entry: &DirEntry, root: &Path) -> bool {
         "lang",
         "ftbquests",
         "chapters",
+        "config",
     ];
 
     if let Ok(relative) = entry.path().strip_prefix(root) {
