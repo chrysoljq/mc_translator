@@ -7,9 +7,12 @@ mod message;
 mod logic;
 mod ui {
     pub mod app;
+    pub mod icon;
 }
 
 use ui::app::MyApp;
+
+use crate::ui::icon::load_icon;
 
 fn main() -> eframe::Result {
     // 初始化日志系统（可选）
@@ -18,7 +21,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([810.0, 500.0])
-            .with_title("MC Mod Translator"),
+            .with_title("MC Mod Translator")
+            .with_icon(load_icon("src/assets/resources/icon.png")),
         ..Default::default()
     };
     

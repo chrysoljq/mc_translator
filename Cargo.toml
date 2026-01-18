@@ -28,6 +28,7 @@ zip = "7.1.0"
 
 # 字体加载
 font-loader = "^0.11"
+image = { version = "^0.24", features = ["png"] }
 
 # 日志
 log = "^0.4"
