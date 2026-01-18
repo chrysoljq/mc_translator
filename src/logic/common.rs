@@ -78,28 +78,38 @@ pub async fn execute_translation_batches(
             let _permit = permit; // 任务结束时自动释放信号量
             
             // 执行翻译请求
-            match client.translate_text_list(source_texts, &context_id, &token).await {
+            let result = match client.translate_text_list(source_texts, &context_id, &token).await {
                 Ok(translated_texts) => {
                     if translated_texts.len() == chunk_len {
-                        Some((original_keys, translated_texts))
+                        Some(translated_texts)
                     } else {
-                        log_warn!("警告: [{}] 批次 {} 返回数量不匹配，跳过回填", context_id, batch_idx + 1);
+                        log_warn!("警告: [{}] 批次 {} 返回数量不匹配，跳过翻译", context_id, batch_idx + 1);
                         None
                     }
                 }
                 Err(e) => {
-                    log_warn!("批次翻译失败: {}", e);
+                    log_warn!("批次翻译失败，跳过翻译。原因: {}", e);
                     None
                 }
-            }
+            };
+            (original_keys, result)
         });
     }
 
     // 收集所有任务结果并回填到 Map 中
     while let Some(res) = tasks.join_next().await {
-        if let Ok(Some((keys, texts))) = res {
-            for (key, text) in keys.iter().zip(texts.iter()) {
-                final_map.insert(key.clone(), Value::String(text.clone()));
+        if let Ok((keys, maybe_texts)) = res {
+            match maybe_texts {
+                Some(texts) => {
+                    for (key, text) in keys.iter().zip(texts.iter()) {
+                        final_map.insert(key.clone(), Value::String(text.clone()));
+                    }
+                }
+                None => {
+                    for key in keys {
+                        final_map.remove(&key);
+                    }
+                }
             }
         }
     }
