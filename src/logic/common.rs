@@ -122,17 +122,25 @@ pub fn extract_mod_id(path: &Path) -> String {
         .components()
         .map(|c| c.as_os_str().to_string_lossy())
         .collect();
+    
     if let Some(idx) = parts.iter().position(|x| x == "lang") {
         if idx > 0 {
             return parts[idx - 1].to_string();
-        } else {
-            log_warn!("发现无法解析的模组：{:?}", path);
         }
     }
-    path.file_stem()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_string()
+    // support special path like modpack_dir/resources/dsurround/dsurround/data/chat/en_us.lang
+    else if let Some(idx) = parts.iter().position(|x| x == "data") {
+        if idx > 0 {
+            return parts[idx - 1].to_string();
+        }
+    }
+    log_warn!("发现无法解析的模组：{:?}", path);
+
+    // path.file_stem()
+    //     .unwrap_or_default()
+    //     .to_string_lossy()
+    //     .to_string()
+    "unknown_mod".to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
