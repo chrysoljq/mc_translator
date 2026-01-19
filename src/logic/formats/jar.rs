@@ -47,7 +47,10 @@ pub async fn process_jar(
             .and_then(|i| parts.get(i + 1))
             .unwrap_or(&"unknown")
             .to_string();
-
+        if mod_id == "minecraft" {
+            continue;
+        }
+        
         let file_name = Path::new(&target_path)
             .file_name()
             .unwrap_or_default()
