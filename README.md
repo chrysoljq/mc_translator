@@ -26,7 +26,28 @@
   - 基于 `egui` 的跨平台界面，简洁直观。
   - 实时日志反馈与进度监控。
 
-
+## ⚙️ 配置
+主要功能可通过GUI配置，可以修改 `MC_Translator/config.json` 来配置当前可用功能。
+```json
+{
+  "api_key": "sk-114514",
+  "base_url": "https://api.openai.com/v1",
+  "input_path": "/path/to/your/modpack",
+  "output_path": "/path/to/your/output",
+  "check_path": "", // 暂时不可用的检查路径，可以将output_path指向你的原先汉化文件路径，然后使用增量翻译功能，翻译内容会增加到原先的末尾
+  "model": "gemini-3-pro-preview",
+  "source_lang": "en_us", // WIP
+  "target_lang": "zh_cn", // WIP
+  "batch_size": 100, // 请求的批次大小，由于只翻译键名，可以设置大一点保证上下文的一致性
+  "skip_existing": true, // 跳过已存在的文件，主要用于不可增量汉化的任务汉化，其他情况建议使用增量翻译
+  "timeout": 600, // 超时时间，遇到 500, 524 错误通常原因是超时时间太短
+  "max_retries": 5, // 最大重试次数
+  "retry_delay": 10, // 初始重试时间间隔，秒
+  "file_semaphore": 5, // 并发文件数
+  "max_network_concurrency": 10, // 最大并发网络请求数
+  "prompt": "你是一个《我的世界》(Minecraft) 模组本地化专家。当前模组 ID: 【{MOD_ID}】。\n我将发送一个包含英文原文的 JSON 字符串数组。\n请将数组中的每一项翻译为简体中文，并返回一个 JSON 字符串数组。\n要求：1\n1. **严格保持顺序**：输出数组的第 N 项必须对应输入数组的第 N 项。\n2. **严格保持长度**：输出数组的元素数量必须与输入完全一致。\n3. 请严格保留格式代码（如 §a, %s, {{0}}，\\n 等）。\n4. 只返回纯净的 JSON 字符串，不要包含 Markdown 代码块标记。"
+}
+```
 
 ## 🛠️ 安装与构建
 

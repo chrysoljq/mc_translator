@@ -93,7 +93,7 @@ pub async fn process_snbt(
         &extracted_map, 
         client, 
         &format!("Quest_{}", file_stem), 
-        ctx.batch_size, 
+        &ctx, 
         token
     ).await;
 

@@ -84,12 +84,13 @@ pub async fn run_processing_task(
         batch_size: config.batch_size,
         skip_existing: config.skip_existing,
         update_existing: update_existing,
+        network_semaphore: Arc::new(Semaphore::new(config.max_network_concurrency)),
     });
     let input = config.input_path.clone();
     let output = config.output_path.clone();
     let input_path = Path::new(&input);
 
-    let file_semaphore = Arc::new(Semaphore::new(5)); // 文件并发数
+    let file_semaphore = Arc::new(Semaphore::new(config.file_semaphore));
     let mut tasks = JoinSet::new();
 
     let result = if input_path.is_file() {
@@ -125,13 +126,13 @@ pub async fn run_processing_task(
                     "lang" => path
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .map(|n| n == "en_us.lang") // 这里如果不报错就不需要改类型注解
+                        .map(|n| n == "en_us.lang")
                         .unwrap_or(false),
                     "snbt" => true,
                     "json" => path
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .map(|n| n == "en_us.json") // 这里如果不报错就不需要改类型注解
+                        .map(|n| n == "en_us.json")
                         .unwrap_or(false),
                     _ => false,
                 };

@@ -1,4 +1,3 @@
-use crate::config::AppConfig;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -26,11 +25,11 @@ impl Mcmeta {
     }
 }
 
-pub fn write_mcmeta(config: &AppConfig) -> Result<()> {
+pub fn write_mcmeta(output_path: &str) -> Result<()> {
     let pack_format = 3;
     let description = "\u{00A7}aAI汉化材质包\u{00A7}r，由 \u{00A7}bmc translator \u{00A7}r生成".to_string();
     let mcmeta = Mcmeta::new(pack_format, description);
-    let output_path = Path::new(&config.output_path).join("pack.mcmeta");
+    let output_path = Path::new(output_path).join("pack.mcmeta");
     
     // Ensure parent directory exists
     if let Some(parent) = output_path.parent() {

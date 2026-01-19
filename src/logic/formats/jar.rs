@@ -96,9 +96,7 @@ pub async fn process_jar(
             &file_name,
             Path::new(output_root),
             client,
-            ctx.batch_size,
-            ctx.skip_existing,
-            ctx.update_existing,
+            ctx.clone(), // Clone needed because of loop
             FileFormat::Json,
             builtin_map,
             token,

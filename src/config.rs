@@ -11,10 +11,15 @@ pub struct AppConfig {
     pub output_path: String,
     pub check_path: String, // TODO: 设置更新检查路径
     pub model: String,
+    pub source_lang: String,
     pub target_lang: String,
     pub batch_size: usize,
     pub skip_existing: bool,
     pub timeout: u64,
+    pub max_retries: u32,
+    pub retry_delay: u64,
+    pub file_semaphore: usize,
+    pub max_network_concurrency: usize,
     pub prompt: String,
 }
 
@@ -24,13 +29,18 @@ impl Default for AppConfig {
             api_key: String::new(),
             base_url: "https://api.openai.com/v1".to_string(),
             input_path: String::new(),
-            output_path: "MC_Translator/output_cn".to_string(),
-            check_path: "MC_Translator/output_cn".to_string(),
+            output_path: "./MC_Translator/output_cn".to_string(),
+            check_path: "./MC_Translator/output_cn".to_string(),
+            source_lang: "en_us".to_string(),
             target_lang: "zh_cn".to_string(),
             model: "gpt-3.5-turbo".to_string(), 
             batch_size: 200,
             skip_existing: true,
             timeout: 600,
+            max_retries: 5,
+            retry_delay: 10,
+            file_semaphore: 5,
+            max_network_concurrency: 10, // Global limit for concurrent network requests
             prompt: "你是一个《我的世界》(Minecraft) 模组本地化专家。当前模组 ID: 【{MOD_ID}】。\n\
         我将发送一个包含英文原文的 JSON 字符串数组。\n\
         请将数组中的每一项翻译为简体中文，并返回一个 JSON 字符串数组。\n\
@@ -45,7 +55,7 @@ impl Default for AppConfig {
 
 impl AppConfig {
     fn config_path() -> PathBuf {
-        PathBuf::from("MC_Translator/config.json")
+        PathBuf::from("./MC_Translator/config.json")
     }
 
     pub fn load() -> Self {

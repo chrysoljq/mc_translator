@@ -8,8 +8,6 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use crate::config::AppConfig;
 
-const MAX_RETRIES: u32 = 5;
-
 #[derive(Clone)]
 pub struct OpenAIClient {
     client: Client,
@@ -17,12 +15,14 @@ pub struct OpenAIClient {
     base_url: String,
     model: String,
     prompt: String,
+    max_retries: u32,
+    retry_delay: u64,
 }
 
 impl OpenAIClient {
     pub fn new(config: AppConfig) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(config.timeout)) // 建议设为 60秒
+            .timeout(Duration::from_secs(config.timeout))
             .build()
             .unwrap_or_default();
 
@@ -31,7 +31,9 @@ impl OpenAIClient {
             api_key: config.api_key,
             base_url: config.base_url.trim_end_matches('/').to_string(),
             model: config.model,
-            prompt: config.prompt
+            prompt: config.prompt,
+            max_retries: config.max_retries,
+            retry_delay: config.retry_delay,
         }
     }
 
@@ -68,7 +70,7 @@ impl OpenAIClient {
                         return Err(anyhow!("API 错误 (HTTP {}): {}", status, text));
                     }
 
-                    if attempt >= MAX_RETRIES {
+                    if attempt >= self.max_retries {
                         let text = resp.text().await.unwrap_or_default();
                         return Err(anyhow!("重试耗尽 (HTTP {}): {}", status, text));
                     }
@@ -80,12 +82,12 @@ impl OpenAIClient {
                                 .ok()
                                 .and_then(|s| s.parse::<u64>().ok())
                                 .map(Duration::from_secs)
-                                .unwrap_or(Duration::from_secs(2_u64.pow(attempt))) // 解析失败则回退
+                                .unwrap_or(Duration::from_secs(self.retry_delay * 2_u64.pow(attempt))) // 解析失败则回退
                         } else {
-                            Duration::from_secs(2_u64.pow(attempt)) // 指数回退
+                            Duration::from_secs(self.retry_delay * 2_u64.pow(attempt)) // 指数回退
                         }
                     } else if status.is_server_error() {
-                        Duration::from_secs(2) // 服务器错误等待 2 秒
+                        Duration::from_secs(self.retry_delay)
                     } else {
                         let text = resp.text().await.unwrap_or_default();
                         return Err(anyhow!("请求失败 (HTTP {}): {}", status, text));
@@ -96,12 +98,12 @@ impl OpenAIClient {
                         status,
                         wait_time,
                         attempt + 1,
-                        MAX_RETRIES
+                        self.max_retries
                     );
                     sleep(wait_time).await;
                 }
                 Err(e) => {
-                    if attempt >= MAX_RETRIES {
+                    if attempt >= self.max_retries {
                         return Err(anyhow!("网络重试耗尽: {}", e));
                     }
 
@@ -111,7 +113,7 @@ impl OpenAIClient {
                         e,
                         wait_time,
                         attempt + 1,
-                        MAX_RETRIES
+                        self.max_retries
                     );
                     sleep(wait_time).await;
                 }

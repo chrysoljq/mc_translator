@@ -15,15 +15,17 @@ pub struct TranslationContext {
     pub batch_size: usize,
     pub skip_existing: bool,
     pub update_existing: bool,
+    pub network_semaphore: Arc<Semaphore>,
 }
 
 pub async fn execute_translation_batches(
     map: &Map<String, Value>,
     client: &OpenAIClient,
     context_id: &str,
-    batch_size: usize,
+    ctx: &TranslationContext,
     token: &CancellationToken,
 ) -> Map<String, Value> {
+    let batch_size = ctx.batch_size;
     let safe_batch_size = if batch_size == 0 { 20 } else { batch_size };
 
     let pending_items: Vec<(&String, &String)> = map
@@ -45,8 +47,6 @@ pub async fn execute_translation_batches(
         return final_map;
     }
 
-    // 限制单个文件内的并发请求数（例如同时处理 10 个批次）
-    let batch_semaphore = Arc::new(Semaphore::new(5));
     let mut tasks = JoinSet::new();
 
     // 分批并创建异步任务
@@ -61,7 +61,7 @@ pub async fn execute_translation_batches(
         let client = client.clone();
         let context_id = context_id.to_string();
         let token = token.clone();
-        let permit = batch_semaphore.clone().acquire_owned().await.unwrap();
+        let permit = ctx.network_semaphore.clone().acquire_owned().await.unwrap();
         
         let chunk_len = chunk.len();
         let total_batches = (total_items + safe_batch_size - 1) / safe_batch_size;
@@ -229,13 +229,13 @@ pub async fn core_translation_pipeline(
     original_filename: &str,
     output_root: &Path,
     client: &OpenAIClient,
-    batch_size: usize,
-    skip_existing: bool,
-    update_existing: bool,
+    ctx: Arc<TranslationContext>,
     format: FileFormat,
     builtin_map: Option<serde_json::Map<String, serde_json::Value>>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
+    let skip_existing = ctx.skip_existing;
+    let update_existing = ctx.update_existing;
     // 构造标准输出路径: output/assets/{modid}/lang/{zh_cn.x}
     let target_name = get_target_filename(original_filename);
     let final_path = output_root
@@ -316,7 +316,7 @@ pub async fn core_translation_pipeline(
     };
 
     let translated_part =
-        execute_translation_batches(&map_to_translate, client, mod_id, batch_size, token).await;
+        execute_translation_batches(&map_to_translate, client, mod_id, &ctx, token).await;
 
     if token.is_cancelled() {
         log_warn!("任务取消，放弃保存: {:?}", final_path);
