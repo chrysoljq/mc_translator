@@ -22,7 +22,7 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([810.0, 500.0])
             .with_title("MC Mod Translator")
-            .with_icon(load_icon("src/assets/resources/icon.png")),
+            .with_icon(load_icon()),
         ..Default::default()
     };
     
