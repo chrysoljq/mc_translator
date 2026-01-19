@@ -15,12 +15,12 @@ pub struct AppConfig {
     pub target_lang: String,
     pub batch_size: usize,
     pub skip_existing: bool,
-    pub timeout: u64,
     pub max_retries: u32,
     pub retry_delay: u64,
     pub file_semaphore: usize,
     pub max_network_concurrency: usize,
     pub prompt: String,
+    pub skip_quest: bool,
 }
 
 impl Default for AppConfig {
@@ -36,7 +36,6 @@ impl Default for AppConfig {
             model: "gpt-3.5-turbo".to_string(), 
             batch_size: 200,
             skip_existing: true,
-            timeout: 600,
             max_retries: 5,
             retry_delay: 10,
             file_semaphore: 5,
@@ -49,6 +48,7 @@ impl Default for AppConfig {
         2. **严格保持长度**：输出数组的元素数量必须与输入完全一致。\n\
         3. 请严格保留格式代码（如 §a, %s, {{0}}，\\n 等）。\n\
         4. 只返回纯净的 JSON 字符串，不要包含 Markdown 代码块标记。".to_string(),
+            skip_quest: true,
         }
     }
 }

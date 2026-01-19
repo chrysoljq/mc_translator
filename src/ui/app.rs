@@ -320,13 +320,8 @@ impl eframe::App for MyApp {
                 ui.add_space(10.0);
                 ui.checkbox(&mut self.config.skip_existing, "跳过已翻译的文件");
                 ui.separator();
-                ui.label("超时时间:");
-                ui.add(
-                    egui::DragValue::new(&mut self.config.timeout)
-                        .range(10..=3600)
-                        .suffix("s"),
-                )
-                .on_hover_text("API 请求超时时间（秒）");
+                ui.checkbox(&mut self.config.skip_quest, "跳过 snbt")
+                    .on_hover_text("勾选后将不再检查config/ftbquests，只检查kubejs下的本地化文件");
             });
             ui.end_row();
             ui.add_space(15.0);

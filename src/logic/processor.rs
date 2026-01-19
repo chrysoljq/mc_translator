@@ -103,6 +103,9 @@ pub async fn run_processing_task(
         )
         .await
     } else if input_path.is_dir() {
+        if config.skip_quest {
+            log_info!("已跳过ftbquests检查，请检查是否存在任务本地化文件后开启");
+        }
         let walker = WalkDir::new(input_path)
             .into_iter()
             .filter_entry(|e| is_allowed_dir(e, input_path));
@@ -128,7 +131,7 @@ pub async fn run_processing_task(
                         .and_then(|n| n.to_str())
                         .map(|n| n == "en_us.lang")
                         .unwrap_or(false),
-                    "snbt" => true,
+                    "snbt" => !config.skip_quest,
                     "json" => path
                         .file_name()
                         .and_then(|n| n.to_str())
