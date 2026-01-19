@@ -1,3 +1,4 @@
+use super::fonts::setup_custom_fonts;
 use crate::config::AppConfig;
 use crate::logging::{LogEntry, LogLevel};
 use crate::logic::openai::OpenAIClient;
@@ -7,7 +8,6 @@ use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use std::thread;
 use tokio_util::sync::CancellationToken;
-use super::fonts::setup_custom_fonts;
 
 pub struct MyApp {
     config: AppConfig,
@@ -370,15 +370,16 @@ impl eframe::App for MyApp {
                     .auto_shrink([false, true])
                     .show(ui, |ui| {
                         for (i, entry) in self.logs.iter().enumerate() {
-                            let (color, prefix) = match entry.level {
-                                LogLevel::Info => (egui::Color32::from_gray(200), "INFO"),
-                                LogLevel::Success => (egui::Color32::LIGHT_GREEN, "DONE"),
-                                LogLevel::Warn => (egui::Color32::YELLOW, "WARN"),
-                                LogLevel::Error => (egui::Color32::LIGHT_RED, "ERR "),
+                            let visuals = ui.visuals();
+                            let (text_color, prefix) = match entry.level {
+                                LogLevel::Info => (visuals.text_color(), "INFO"),
+                                LogLevel::Success => (egui::Color32::from_rgb(0, 200, 0), "DONE"),
+                                LogLevel::Warn => (visuals.warn_fg_color, "WARN"),
+                                LogLevel::Error => (visuals.error_fg_color, "ERR "),
                             };
 
                             let bg_color = if i % 2 == 1 {
-                                egui::Color32::from_gray(30)
+                                visuals.faint_bg_color
                             } else {
                                 egui::Color32::TRANSPARENT
                             };
@@ -390,7 +391,7 @@ impl eframe::App for MyApp {
                                 full_text,
                                 egui::TextFormat {
                                     font_id: egui::FontId::monospace(13.0),
-                                    color,
+                                    color: text_color,
                                     ..Default::default()
                                 },
                             );
@@ -401,7 +402,6 @@ impl eframe::App for MyApp {
                                 .inner_margin(2.0)
                                 .show(ui, |ui| {
                                     ui.set_min_width(ui.available_width());
-
                                     ui.label(job);
                                 });
                         }
