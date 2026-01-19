@@ -1,6 +1,6 @@
 # MC Mod Translator (Minecraft 模组汉化助手)
 
-基于 Rust 与 egui 构建的跨平台图形化 Minecraft 模组翻译工具。集成大语言模型实现上下文感知的智能汉化，支持 JAR、JSON、LANG 及 SNBT 多种格式的自动化处理，旨在为玩家与汉化者提供高效、精准的翻译体验。
+基于 Rust 与 egui 构建的跨平台图形化 Minecraft 模组翻译工具。集成大语言模型实现上下文感知的智能汉化，支持 JAR、JSON、LANG 及 SNBT 多种格式的自动化处理，旨在为玩家与汉化者提供高效、精准的翻译体验。支持全量翻译和增量式翻译（SNBT格式除外）。
 ![alt text](image.png)
 
 ## ✨ 功能特性
