@@ -249,7 +249,7 @@ pub async fn core_translation_pipeline(
         return Ok(());
     }
 
-    let (map_to_translate, mut base_map) = if update_existing && final_path.exists() {
+    let (map_to_translate, mut base_map) = if update_existing {
         // [更新模式]
         let existing_map = read_map_from_file(&final_path, format).unwrap_or_default();
         let builtin_entries = builtin_map.unwrap_or_default();
