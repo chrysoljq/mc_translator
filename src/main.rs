@@ -1,7 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // 发布时隐藏控制台
 
 mod config;
-mod utils;
 mod logging;
 mod message;
 mod logic;

@@ -3,11 +3,11 @@ use crate::logging::{LogEntry, LogLevel};
 use crate::logic::openai::OpenAIClient;
 use crate::logic::processor;
 use crate::message::{AppMsg, GLOBAL_SENDER};
-use crate::utils::setup_custom_fonts;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use std::thread;
 use tokio_util::sync::CancellationToken;
+use super::fonts::setup_custom_fonts;
 
 pub struct MyApp {
     config: AppConfig,
