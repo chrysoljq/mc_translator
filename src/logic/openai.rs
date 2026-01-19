@@ -1,3 +1,4 @@
+use crate::config::AppConfig;
 use crate::log_warn;
 use anyhow::{Result, anyhow};
 use reqwest::{Client, RequestBuilder, Response, StatusCode};
@@ -6,7 +7,6 @@ use std::time::Duration;
 use tokio::select;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use crate::config::AppConfig;
 
 #[derive(Clone)]
 pub struct OpenAIClient {
@@ -22,7 +22,7 @@ pub struct OpenAIClient {
 impl OpenAIClient {
     pub fn new(config: AppConfig) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(config.timeout))
+            // .timeout(Duration::from_secs(config.timeout)) // 取消超时限制，改用流式读取防止大包中断
             .build()
             .unwrap_or_default();
 
@@ -82,7 +82,9 @@ impl OpenAIClient {
                                 .ok()
                                 .and_then(|s| s.parse::<u64>().ok())
                                 .map(Duration::from_secs)
-                                .unwrap_or(Duration::from_secs(self.retry_delay * 2_u64.pow(attempt))) // 解析失败则回退
+                                .unwrap_or(Duration::from_secs(
+                                    self.retry_delay * 2_u64.pow(attempt),
+                                )) // 解析失败则回退
                         } else {
                             Duration::from_secs(self.retry_delay * 2_u64.pow(attempt)) // 指数回退
                         }
@@ -149,53 +151,7 @@ impl OpenAIClient {
         models.sort();
         Ok(models)
     }
-    /*
-    pub async fn translate_batch(
-        &self,
-        data: Map<String, Value>,
-        mod_id: &str,
-        token: &CancellationToken,
-    ) -> Result<Map<String, Value>> {
-        let system_prompt = format!(
-            "你是一个《我的世界》(Minecraft) 模组本地化专家。当前模组 ID: 【{}】。\n\
-            请将传入的 JSON Value (英文) 翻译为简体中文，Key 必须保持不变。\n\
-            请严格保留格式代码（如 §a, %s, {{0}} 等）。\n\
-            只返回纯净的 JSON 字符串，不要包含 Markdown 代码块标记。",
-            mod_id
-        );
 
-        let request_body = json!({
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": serde_json::to_string(&data)?}
-            ],
-            "temperature": 0.1
-        });
-
-        let resp = self
-            .send_with_retry(
-                || {
-                    self.client
-                        .post(format!("{}/chat/completions", self.base_url))
-                        .header("Authorization", format!("Bearer {}", self.api_key))
-                        .header("Content-Type", "application/json")
-                        .json(&request_body) // reqwest 会自动处理 json 的克隆
-                },
-                token,
-            )
-            .await?;
-
-        let resp_json: Value = resp.json().await?;
-        let content = resp_json["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or(anyhow!("API 返回内容为空"))?;
-
-        let clean_content = self.clean_json_string(content);
-        let parsed: Map<String, Value> = serde_json::from_str(&clean_content)?;
-        Ok(parsed)
-    }
-    */
     pub async fn translate_text_list(
         &self,
         texts: Vec<String>,
@@ -210,10 +166,11 @@ impl OpenAIClient {
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": serde_json::to_string(&texts)?}
             ],
-            "temperature": 0.1
+            "temperature": 0.1,
+            "stream": true
         });
 
-        let resp = self
+        let mut resp = self
             .send_with_retry(
                 || {
                     self.client
@@ -226,12 +183,41 @@ impl OpenAIClient {
             )
             .await?;
 
-        let resp_json: Value = resp.json().await?;
-        let content = resp_json["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or(anyhow!("API 返回内容为空"))?;
+        // 流式解析处理
+        let mut full_content = String::new();
+        let mut buffer = String::new();
 
-        let clean_content = self.clean_json_string(content);
+        while let Some(chunk) = resp.chunk().await? {
+            if token.is_cancelled() {
+                return Err(anyhow!("任务取消"));
+            }
+            let s = String::from_utf8_lossy(&chunk);
+            buffer.push_str(&s);
+
+            while let Some(idx) = buffer.find('\n') {
+                let line = buffer[..idx].trim().to_string();
+                buffer = buffer[idx + 1..].to_string();
+                println!("ceshi{}", line);
+
+                if line.starts_with("data: ") {
+                    let data = line[6..].trim();
+                    if data == "[DONE]" {
+                        break;
+                    }
+                    if let Ok(v) = serde_json::from_str::<Value>(data) {
+                        if let Some(content) = v["choices"][0]["delta"]["content"].as_str() {
+                            full_content.push_str(content);
+                        }
+                    }
+                }
+            }
+        }
+
+        if full_content.is_empty() {
+            return Err(anyhow!("API 返回内容为空"));
+        }
+
+        let clean_content = self.clean_json_string(&full_content);
         let parsed: Vec<String> = serde_json::from_str(&clean_content)?;
         Ok(parsed)
     }
