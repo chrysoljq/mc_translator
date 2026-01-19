@@ -1,4 +1,4 @@
-use crate::log_info;
+use crate::{log_info, log_warn, log_err};
 use crate::logic::common::{FileFormat, TranslationContext, core_translation_pipeline};
 use crate::logic::openai::OpenAIClient;
 use std::fs;
@@ -61,7 +61,26 @@ pub async fn process_jar(
             zf.read_to_string(&mut content)?;
         }
 
-        let src_json: serde_json::Value = serde_json::from_str(&content)?;
+        if content.trim().is_empty() {
+            log_warn!("跳过空文件: {} -> {}", jar_name, target_path);
+            continue;
+        }
+
+        let mut sanitized = crate::logic::common::sanitize_json_content(&content);
+        // 如果处理后只剩空内容（比如只有注释），视为失效
+        if sanitized.trim().is_empty() {
+             sanitized = "{}".to_string();
+        }
+
+        let src_json: serde_json::Value = match serde_json::from_str(&sanitized) {
+            Ok(v) => v,
+            Err(e) => {
+                log_err!("JSON 解析失败: {} -> {} (Error: {})", jar_name, target_path, e);
+                let snippet: String = sanitized.chars().take(200).collect();
+                log_err!("Sanitized snippet: {}", snippet);
+                continue;
+            }
+        };
         let src_map = match src_json {
             serde_json::Value::Object(map) => map,
             _ => continue,

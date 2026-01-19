@@ -1,5 +1,5 @@
 use crate::logic::openai::OpenAIClient;
-use crate::{log_info, log_warn};
+use crate::{log_info, log_warn, log_err};
 use anyhow::Result;
 use serde_json::{Map, Value};
 use std::fs;
@@ -83,12 +83,12 @@ pub async fn execute_translation_batches(
                     if translated_texts.len() == chunk_len {
                         Some(translated_texts)
                     } else {
-                        log_warn!("警告: [{}] 批次 {} 返回数量不匹配，跳过翻译", context_id, batch_idx + 1);
+                        log_err!("[{}] 批次 {} 返回数量不匹配，跳过翻译", context_id, batch_idx + 1);
                         None
                     }
                 }
                 Err(e) => {
-                    log_warn!("批次翻译失败，跳过翻译。原因: {}", e);
+                    log_err!("[{}] 批次翻译失败，跳过翻译。原因: {}", context_id, e);
                     None
                 }
             };
@@ -162,6 +162,85 @@ pub fn get_target_filename(original_name: &str) -> String {
     }
 }
 
+pub fn sanitize_json_content(content: &str) -> String {
+    let mut result = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    let mut in_string = false;
+    let mut escape = false;
+
+    // 移除 BOM
+    if let Some('\u{feff}') = chars.peek() {
+        chars.next();
+    }
+
+    while let Some(c) = chars.next() {
+        if !in_string {
+            // 检查开头是否是 // 注释
+            if c == '/' {
+                if let Some(&next_c) = chars.peek() {
+                    if next_c == '/' {
+                        // 发现注释，跳过直到换行
+                        chars.next(); // consume second '/'
+                        while let Some(&comment_c) = chars.peek() {
+                            if comment_c == '\n' || comment_c == '\r' {
+                                break;
+                            }
+                            chars.next();
+                        }
+                        continue;
+                    }
+                }
+            }
+            // 检查 # 注释 (YAML/Properties 风格兼容)
+            if c == '#' {
+                 while let Some(&comment_c) = chars.peek() {
+                    if comment_c == '\n' || comment_c == '\r' {
+                        break;
+                    }
+                    chars.next();
+                }
+                continue;
+            }
+
+            if c == '\"' {
+                in_string = true;
+            }
+            result.push(c);
+        } else {
+            // inside string
+            if escape {
+                escape = false;
+                match c {
+                    '\n' => result.push('n'), // 修正：反斜杠后接换行符，视为需要被转换为 \n
+                    '\r' => {}, 
+                    _ => result.push(c),
+                }
+            } else if c == '\\' {
+                escape = true;
+                result.push(c);
+            } else if c == '\"' {
+                in_string = false;
+                result.push(c);
+            } else {
+                // 处理字符串内部的换行符和控制字符
+                match c {
+                    '\n' => result.push_str("\\n"),
+                    '\r' => {}, // 忽略回车
+                    '\t' => result.push_str("\\t"),
+                    _ => {
+                        if c.is_control() {
+                            // 忽略其他控制字符，防止 JSON 解析报错
+                        } else {
+                            result.push(c);
+                        }
+                    },
+                }
+            }
+        }
+    }
+    result
+}
+
 pub fn read_map_from_file(
     path: &Path,
     format: FileFormat,
@@ -172,8 +251,9 @@ pub fn read_map_from_file(
     match format {
         FileFormat::Json => {
             let content = fs::read_to_string(path)?;
+            let sanitized = sanitize_json_content(&content);
             let json: serde_json::Value =
-                serde_json::from_str(&content).unwrap_or(serde_json::Value::Object(Map::new()));
+                serde_json::from_str(&sanitized).unwrap_or(serde_json::Value::Object(Map::new()));
             Ok(json.as_object().cloned().unwrap_or_default())
         }
         FileFormat::Lang => {

@@ -314,9 +314,9 @@ impl eframe::App for MyApp {
                     self.show_prompt_editor = true;
                 }
                 ui.separator();
-                ui.label("批大小:");
+                ui.label("批次大小:");
                 ui.add(egui::DragValue::new(&mut self.config.batch_size).range(1..=1000))
-                    .on_hover_text("越大消耗越多，但准确性下降");
+                    .on_hover_text("影响上下文的处理");
                 ui.add_space(10.0);
                 ui.checkbox(&mut self.config.skip_existing, "跳过已翻译的文件");
                 ui.separator();

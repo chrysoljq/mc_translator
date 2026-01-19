@@ -154,7 +154,7 @@ pub async fn run_processing_task(
                             ctx,
                             &token
                         ).await {
-                            log_warn!("处理 {} 失败: {}", path.display(), e);
+                            log_err!("处理 {} 失败: {}", path.display(), e);
                         }
                     });
                 }
