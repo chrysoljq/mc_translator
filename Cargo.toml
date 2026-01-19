@@ -1,6 +1,6 @@
 [package]
 name = "mc_translator"
-version = "0.2.10"
+version = "0.2.12"
 edition = "2024"
 build = "src/build.rs"
 
