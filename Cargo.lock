@@ -2361,7 +2361,7 @@ dependencies = [
 
 [[package]]
 name = "mc_translator"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "anyhow",
  "chrono",
