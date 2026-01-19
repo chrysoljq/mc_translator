@@ -8,6 +8,7 @@ mod logic;
 mod ui {
     pub mod app;
     pub mod icon;
+    pub mod fonts;
 }
 
 use ui::app::MyApp;
@@ -27,7 +28,7 @@ fn main() -> eframe::Result {
     };
     
     eframe::run_native(
-        "MC Translator Rust",
+        "MC Translator",
         options,
         Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )

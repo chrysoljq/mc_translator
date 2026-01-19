@@ -11,6 +11,7 @@ pub struct AppConfig {
     pub output_path: String,
     pub check_path: String, // TODO: 设置更新检查路径
     pub model: String,
+    pub target_lang: String,
     pub batch_size: usize,
     pub skip_existing: bool,
     pub timeout: u64,
@@ -25,6 +26,7 @@ impl Default for AppConfig {
             input_path: String::new(),
             output_path: "MC_Translator/output_cn".to_string(),
             check_path: String::new(),
+            target_lang: "zh_cn".to_string(),
             model: "gpt-3.5-turbo".to_string(), 
             batch_size: 200,
             skip_existing: true,
