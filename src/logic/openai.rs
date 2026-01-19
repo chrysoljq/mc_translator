@@ -197,7 +197,6 @@ impl OpenAIClient {
             while let Some(idx) = buffer.find('\n') {
                 let line = buffer[..idx].trim().to_string();
                 buffer = buffer[idx + 1..].to_string();
-                println!("ceshi{}", line);
 
                 if line.starts_with("data: ") {
                     let data = line[6..].trim();
