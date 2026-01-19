@@ -67,6 +67,29 @@ pub async fn process_jar(
             _ => continue,
         };
 
+        let target_filename = crate::logic::common::get_target_filename(&file_name);
+        
+        // 尝试从 JAR 中读取内置汉化 (e.g. assets/modid/lang/zh_cn.json)
+        let builtin_path = Path::new(&target_path)
+            .parent()
+            .map(|p| p.join(&target_filename))
+            .map(|p| p.to_string_lossy().replace('\\', "/")); // ZIP use forward slashes
+
+        let mut builtin_map = None;
+        if let Some(bp) = builtin_path {
+             // zip lookup is case sensitive usually, but standard mc layout is lowercase
+            if let Ok(mut zf) = archive.by_name(&bp) {
+                let mut content = String::new();
+                if zf.read_to_string(&mut content).is_ok() {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(map) = json.as_object() {
+                            builtin_map = Some(map.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         core_translation_pipeline(
             src_map,
             &mod_id,
@@ -77,6 +100,7 @@ pub async fn process_jar(
             ctx.skip_existing,
             ctx.update_existing,
             FileFormat::Json,
+            builtin_map,
             token,
         )
         .await?;

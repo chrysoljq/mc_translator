@@ -25,7 +25,7 @@ impl Default for AppConfig {
             base_url: "https://api.openai.com/v1".to_string(),
             input_path: String::new(),
             output_path: "MC_Translator/output_cn".to_string(),
-            check_path: String::new(),
+            check_path: "MC_Translator/output_cn".to_string(),
             target_lang: "zh_cn".to_string(),
             model: "gpt-3.5-turbo".to_string(), 
             batch_size: 200,

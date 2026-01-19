@@ -233,6 +233,7 @@ pub async fn core_translation_pipeline(
     skip_existing: bool,
     update_existing: bool,
     format: FileFormat,
+    builtin_map: Option<serde_json::Map<String, serde_json::Value>>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     // 构造标准输出路径: output/assets/{modid}/lang/{zh_cn.x}
@@ -251,37 +252,64 @@ pub async fn core_translation_pipeline(
     let (map_to_translate, mut base_map) = if update_existing && final_path.exists() {
         // [更新模式]
         let existing_map = read_map_from_file(&final_path, format).unwrap_or_default();
+        let builtin_entries = builtin_map.unwrap_or_default();
 
         let mut pending = serde_json::Map::new();
+        let mut recovered_from_builtin = 0;
+
+        // 这里需要修改 base_map，因为我们要把 built-in 的内容补充进去
+        // 但 existing_map 是只读的，所以我们要先 clone 一份作为 base
+        let mut final_base_map = existing_map.clone();
+
         for (k, v) in &src_map {
-            if !existing_map.contains_key(k) {
+            // 如果输出文件里已经有了，跳过
+            if final_base_map.contains_key(k) {
+                continue;
+            }
+
+            // 如果输出文件没有，检查内置汉化
+            if let Some(builtin_val) = builtin_entries.get(k) {
+                // 有内置汉化，直接使用，不重新翻译
+                final_base_map.insert(k.clone(), builtin_val.clone());
+                recovered_from_builtin += 1;
+            } else {
+                // 既没有输出，也没有内置，加入待翻译队列
                 pending.insert(k.clone(), v.clone());
             }
         }
 
-        if pending.is_empty() {
+        if pending.is_empty() && recovered_from_builtin == 0 {
             log_info!("无新增条目，无需更新: {:?}", final_path);
             return Ok(());
         }
 
-        log_info!(
-            "增量更新检测到 {} 个新条目 (ModID: {})",
-            pending.len(),
-            mod_id
-        );
-
-        // [保存增量原始内容]
-        let raw_dir = output_root.join("raw_content");
-        if !raw_dir.exists() {
-            fs::create_dir_all(&raw_dir)?;
+        if recovered_from_builtin > 0 {
+            log_info!(
+                "从内置汉化中恢复了 {} 个条目 (ModID: {})",
+                recovered_from_builtin,
+                mod_id
+            );
         }
-        // 文件名增加 hash 或 timestamp 防止覆盖？这里暂时用 modid+filename
-        let raw_path = raw_dir.join(format!("{}_{}", mod_id, original_filename));
-        let raw_file = fs::File::create(&raw_path)?;
-        serde_json::to_writer_pretty(raw_file, &pending)?;
-        log_info!("已备份增量原始内容: {:?}", raw_path);
 
-        (pending, existing_map)
+        if !pending.is_empty() {
+             log_info!(
+                "增量更新检测到 {} 个新条目 (ModID: {})",
+                pending.len(),
+                mod_id
+            );
+
+            // [保存增量原始内容]
+            let raw_dir = output_root.join("raw_content");
+            if !raw_dir.exists() {
+                fs::create_dir_all(&raw_dir)?;
+            }
+            let raw_path = raw_dir.join(format!("{}_{}", mod_id, original_filename));
+            let raw_file = fs::File::create(&raw_path)?;
+            serde_json::to_writer_pretty(raw_file, &pending)?;
+            log_info!("已备份增量原始内容: {:?}", raw_path);
+        }
+
+        (pending, final_base_map)
     } else {
         // [全量模式]
         (src_map, serde_json::Map::new())
