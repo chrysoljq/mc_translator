@@ -16,6 +16,8 @@ pub struct TranslationContext {
     pub skip_existing: bool,
     pub update_existing: bool,
     pub network_semaphore: Arc<Semaphore>,
+    pub source_lang: String,
+    pub target_lang: String,
 }
 
 pub async fn execute_translation_batches(
@@ -149,16 +151,19 @@ pub enum FileFormat {
     Lang,
 }
 
-pub fn get_target_filename(original_name: &str) -> String {
-    if original_name.contains("en_us") {
-        original_name.replace("en_us", "zh_cn")
-    } else if original_name.contains("en_") {
-        original_name
-            .replace("en_", "zh_")
-            .replace("US", "CN")
-            .replace("us", "cn")
+pub fn get_target_filename(original_name: &str, source_lang: &str, target_lang: &str) -> String {
+    // 简单的替换逻辑：如果不区分大小写地包含 source_lang，则替换为 target_lang
+    // 同时也保留原有的 en_us -> zh_cn 的兜底逻辑，以防 source_lang 设置不精确
+
+    let lower_name = original_name.to_lowercase();
+    let lower_source = source_lang.to_lowercase();
+    let lower_target = target_lang.to_lowercase();
+
+    if lower_name.contains(&lower_source) {
+        original_name.replace(source_lang, target_lang)
+                     .replace(&lower_source, &lower_target)
     } else {
-        format!("zh_cn_{}", original_name)
+        format!("{}_{}", lower_target, original_name)
     }
 }
 
@@ -317,7 +322,7 @@ pub async fn core_translation_pipeline(
     let skip_existing = ctx.skip_existing;
     let update_existing = ctx.update_existing;
     // 构造标准输出路径: output/assets/{modid}/lang/{zh_cn.x}
-    let target_name = get_target_filename(original_filename);
+    let target_name = get_target_filename(original_filename, &ctx.source_lang, &ctx.target_lang);
     let final_path = output_root
         .join("assets")
         .join(mod_id)

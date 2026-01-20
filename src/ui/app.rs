@@ -228,12 +228,59 @@ impl eframe::App for MyApp {
             ui.separator();
 
             egui::Grid::new("settings_grid")
-                .num_columns(2)
+                .num_columns(3)
                 .spacing([10.0, 8.0])
                 .striped(true)
                 .show(ui, |ui| {
                     ui.label("BASE URL:");
-                    ui.text_edit_singleline(&mut self.config.base_url);
+                    
+
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(&mut self.config.base_url);
+                        const LANGUAGES: &[(&str, &str)] = &[
+                            ("en_us", "English (US)"),
+                            ("zh_cn", "简体中文 (Simplified Chinese)"),
+                            ("zh_tw", "繁體中文 (Traditional Chinese)"),
+                            ("ja_jp", "日本語 (Japanese)"),
+                            ("ko_kr", "한국어 (Korean)"),
+                            ("ru_ru", "Русский (Russian)"),
+                            ("fr_fr", "Français (French)"),
+                            ("es_es", "Español (Spanish)"),
+                            ("de_de", "Deutsch (German)"),
+                            ("it_it", "Italiano (Italian)"),
+                            ("pt_br", "Português (Brazil)"),
+                        ];
+
+                        egui::ComboBox::from_id_salt("source_lang")
+                            .selected_text(&self.config.source_lang)
+                            .width(80.0)
+                            .show_ui(ui, |ui| {
+                                for (code, name) in LANGUAGES {
+                                    ui.selectable_value(
+                                        &mut self.config.source_lang,
+                                        code.to_string(),
+                                        format!("{} - {}", code, name),
+                                    );
+                                }
+                            });
+
+                        if ui.button("→").on_hover_text("交换语言").clicked() {
+                            std::mem::swap(&mut self.config.source_lang, &mut self.config.target_lang);
+                        }
+
+                        egui::ComboBox::from_id_salt("target_lang")
+                            .selected_text(&self.config.target_lang)
+                            .width(80.0)
+                            .show_ui(ui, |ui| {
+                                for (code, name) in LANGUAGES {
+                                    ui.selectable_value(
+                                        &mut self.config.target_lang,
+                                        code.to_string(),
+                                        format!("{} - {}", code, name),
+                                    );
+                                }
+                            });
+                    });
                     ui.end_row();
 
                     ui.label("API KEY:");

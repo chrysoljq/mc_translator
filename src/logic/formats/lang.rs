@@ -24,7 +24,7 @@ pub async fn process_lang(
     let mod_id = extract_mod_id(file_path);
     let file_name = file_path.file_name().unwrap_or_default().to_string_lossy();
 
-    let target_filename = crate::logic::common::get_target_filename(&file_name);
+    let target_filename = crate::logic::common::get_target_filename(&file_name, &ctx.source_lang, &ctx.target_lang);
 
     // 检查是否有同目录的内置汉化文件 (e.g. zh_cn.lang)
     let builtin_path = file_path.with_file_name(&target_filename);

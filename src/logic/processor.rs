@@ -85,6 +85,8 @@ pub async fn run_processing_task(
         skip_existing: config.skip_existing,
         update_existing: update_existing,
         network_semaphore: Arc::new(Semaphore::new(config.max_network_concurrency)),
+        source_lang: config.source_lang.clone(),
+        target_lang: config.target_lang.clone(),
     });
     let input = config.input_path.clone();
     let output = config.output_path.clone();
@@ -129,13 +131,13 @@ pub async fn run_processing_task(
                     "lang" => path
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .map(|n| n == "en_us.lang")
+                        .map(|n| n.contains(&config.source_lang))
                         .unwrap_or(false),
                     "snbt" => !config.skip_quest,
                     "json" => path
                         .file_name()
                         .and_then(|n| n.to_str())
-                        .map(|n| n == "en_us.json")
+                        .map(|n| n.contains(&config.source_lang))
                         .unwrap_or(false),
                     _ => false,
                 };

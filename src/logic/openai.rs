@@ -17,6 +17,8 @@ pub struct OpenAIClient {
     prompt: String,
     max_retries: u32,
     retry_delay: u64,
+    source_lang: String,
+    target_lang: String,
 }
 
 impl OpenAIClient {
@@ -34,6 +36,8 @@ impl OpenAIClient {
             prompt: config.prompt,
             max_retries: config.max_retries,
             retry_delay: config.retry_delay,
+            source_lang: config.source_lang,
+            target_lang: config.target_lang,
         }
     }
 
@@ -158,7 +162,11 @@ impl OpenAIClient {
         mod_id: &str,
         token: &CancellationToken,
     ) -> Result<Vec<String>> {
-        let system_prompt = self.prompt.replace("{MOD_ID}", &mod_id);
+        let system_prompt = self
+            .prompt
+            .replace("{MOD_ID}", &mod_id)
+            .replace("{SOURCE_LANG}", &self.source_lang)
+            .replace("{TARGET_LANG}", &self.target_lang);
 
         let request_body = json!({
             "model": self.model,

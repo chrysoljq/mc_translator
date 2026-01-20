@@ -42,8 +42,8 @@ impl Default for AppConfig {
             file_semaphore: 5,
             max_network_concurrency: 10, // Global limit for concurrent network requests
             prompt: "你是一个《我的世界》(Minecraft) 模组本地化专家。当前模组 ID: 【{MOD_ID}】。\n\
-        我将发送一个包含英文原文的 JSON 字符串数组。\n\
-        请将数组中的每一项翻译为简体中文，并返回一个 JSON 字符串数组。\n\
+        我将发送一个包含 {SOURCE_LANG} 原文的 JSON 字符串数组。\n\
+        请将数组中的每一项翻译为 {TARGET_LANG}，并返回一个 JSON 字符串数组。\n\
         要求：\n\
         1. **严格保持顺序**：输出数组的第 N 项必须对应输入数组的第 N 项。\n\
         2. **严格保持长度**：输出数组的元素数量必须与输入完全一致。\n\
