@@ -46,13 +46,13 @@ jobs:
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bin: mc_translator
-            name: mc-translator-${{ needs.prepare.outputs.version }}-x86_64-linux
+            name: mc-translator-${{ needs.prepare.outputs.version }}-x86_64-linux.tar.gz
 
           - os_name: macOS-x86_64
             os: macos-latest
             target: x86_64-apple-darwin
             bin: mc_translator
-            name: mc-translator-${{ needs.prepare.outputs.version }}-x86_64-macos
+            name: mc-translator-${{ needs.prepare.outputs.version }}-x86_64-macos.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +63,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libssl-dev pkg-config
 
+      - name: Install cargo-bundle
+        if: matrix.platform.os == 'macos-latest'
+        run: cargo install cargo-bundle
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -72,13 +76,28 @@ jobs:
         uses: swatinem/rust-cache@v2
 
       - name: Build Binary
+        if: matrix.platform.os != 'macos-latest'
         run: cargo build --release --target ${{ matrix.platform.target }}
+
+      - name: Build macOS Bundle
+        if: matrix.platform.os == 'macos-latest'
+        run: cargo bundle --release --target ${{ matrix.platform.target }}
 
       - name: Prepare release assets
         shell: bash
         run: |
           mkdir -p release_assets
-          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} release_assets/${{ matrix.platform.name }}
+          
+          if [[ "${{ matrix.platform.os }}" == "windows-latest" ]]; then
+            cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} release_assets/${{ matrix.platform.name }}
+          elif [[ "${{ matrix.platform.os }}" == "ubuntu-latest" ]]; then
+            tar -czvf release_assets/${{ matrix.platform.name }} -C target/${{ matrix.platform.target }}/release ${{ matrix.platform.bin }}
+          elif [[ "${{ matrix.platform.os }}" == "macos-latest" ]]; then
+            # cargo bundle output -> target/x86_64-apple-darwin/release/bundle/osx/mc_translator.app
+            cp -r target/${{ matrix.platform.target }}/release/bundle/osx/mc_translator.app ./
+            zip -r release_assets/${{ matrix.platform.name }} mc_translator.app
+          fi
+          
           cd release_assets
           ls -la
 

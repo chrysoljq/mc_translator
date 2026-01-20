@@ -4,6 +4,16 @@ version = "0.2.13"
 edition = "2024"
 build = "src/build.rs"
 
+[package.metadata.bundle]
+identifier = "com.github.mc_translator"
+icon = ["mc_translator.ico"]
+copyright = "Copyright (c) 2024 mc_translator requirements"
+category = "Productivity"
+short_description = "Minecraft Translator Tool"
+long_description = """
+A tool to help translate Minecraft mods and resources.
+"""
+
 [build-dependencies]
 winres = "0.1.12"
 
