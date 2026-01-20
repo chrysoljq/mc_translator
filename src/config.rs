@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use crate::log_err;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
@@ -62,13 +63,25 @@ impl AppConfig {
         if let Ok(content) = fs::read_to_string(Self::config_path()) {
             serde_json::from_str(&content).unwrap_or_default()
         } else {
+            let config = Self::default();
+            config.save();
             Self::default()
         }
     }
 
     pub fn save(&self) {
+        let path = Self::config_path();
+
+        if let Some(parent) = path.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                log_err!("无法创建配置目录: {}", e);
+                return;
+            }
+        }
         if let Ok(data) = serde_json::to_string_pretty(self) {
-            let _ = fs::write(Self::config_path(), data);
+            if let Err(e) = fs::write(&path, data) {
+                log_err!("无法保存配置文件到 {:?}: {}", path, e);
+            }
         }
     }
 }
