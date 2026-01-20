@@ -25,8 +25,11 @@ pub async fn process_jar(
     let mut targets = Vec::new();
     for i in 0..archive.len() {
         let file = archive.by_index(i)?;
-        if file.name().contains("assets") && file.name().ends_with("en_us.json") {
-            targets.push(file.name().to_string());
+        let fname = file.name();
+        if fname.contains("assets") && fname.contains(&ctx.source_lang) {
+            if fname.ends_with(".json") || fname.ends_with(".lang") {
+                targets.push(fname.to_string());
+            }
         }
     }
 
@@ -69,43 +72,67 @@ pub async fn process_jar(
             continue;
         }
 
-        let mut sanitized = crate::logic::common::sanitize_json_content(&content);
-        // 如果处理后只剩空内容（比如只有注释），视为失效
-        if sanitized.trim().is_empty() {
-             sanitized = "{}".to_string();
-        }
+        let is_lang_file = target_path.ends_with(".lang");
+        let format = if is_lang_file { FileFormat::Lang } else { FileFormat::Json };
 
-        let src_json: serde_json::Value = match serde_json::from_str(&sanitized) {
-            Ok(v) => v,
-            Err(e) => {
-                log_err!("JSON 解析失败: {} -> {} (Error: {})", jar_name, target_path, e);
-                let snippet: String = sanitized.chars().take(200).collect();
-                log_err!("Sanitized snippet: {}", snippet);
-                continue;
+        let src_map = if is_lang_file {
+            let mut map = serde_json::Map::new();
+            for line in content.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some((k, v)) = line.split_once('=') {
+                    map.insert(
+                        k.trim().to_string(),
+                        serde_json::Value::String(v.trim().to_string()),
+                    );
+                }
+            }
+            map
+        } else {
+            let mut sanitized = crate::logic::common::sanitize_json_content(&content);
+            if sanitized.trim().is_empty() {
+                 sanitized = "{}".to_string();
+            }
+            match serde_json::from_str(&sanitized) {
+                Ok(serde_json::Value::Object(map)) => map,
+                Ok(_) => continue,
+                Err(e) => {
+                    log_err!("JSON 解析失败: {} -> {} (Error: {})", jar_name, target_path, e);
+                    continue;
+                }
             }
         };
-        let src_map = match src_json {
-            serde_json::Value::Object(map) => map,
-            _ => continue,
-        };
 
-        let target_filename = crate::logic::common::get_target_filename(&file_name);
+        let target_filename = crate::logic::common::get_target_filename(&file_name, &ctx.source_lang, &ctx.target_lang);
         
-        // 尝试从 JAR 中读取内置汉化 (e.g. assets/modid/lang/zh_cn.json)
+        // 尝试从 JAR 中读取内置汉化 (e.g. assets/modid/lang/zh_cn.json / .lang)
         let builtin_path = Path::new(&target_path)
             .parent()
             .map(|p| p.join(&target_filename))
-            .map(|p| p.to_string_lossy().replace('\\', "/")); // ZIP use forward slashes
+            .map(|p| p.to_string_lossy().replace('\\', "/")); 
 
         let mut builtin_map = None;
         if let Some(bp) = builtin_path {
-             // zip lookup is case sensitive usually, but standard mc layout is lowercase
             if let Ok(mut zf) = archive.by_name(&bp) {
                 let mut content = String::new();
                 if zf.read_to_string(&mut content).is_ok() {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(map) = json.as_object() {
-                            builtin_map = Some(map.clone());
+                    if is_lang_file {
+                         // Parse built-in lang
+                        let mut map = serde_json::Map::new();
+                        for line in content.lines() {
+                            if let Some((k, v)) = line.split_once('=') {
+                                map.insert(k.trim().to_string(), serde_json::Value::String(v.trim().to_string()));
+                            }
+                        }
+                        builtin_map = Some(map);
+                    } else {
+                        // Parse built-in json, assume it's is standard
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Some(map) = json.as_object() {
+                                builtin_map = Some(map.clone());
+                            }
                         }
                     }
                 }
@@ -118,8 +145,8 @@ pub async fn process_jar(
             &file_name,
             Path::new(output_root),
             client,
-            ctx.clone(), // Clone needed because of loop
-            FileFormat::Json,
+            ctx.clone(),
+            format,
             builtin_map,
             token,
         )
