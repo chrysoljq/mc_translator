@@ -1,7 +1,7 @@
 # MC Mod Translator (Minecraft 模组汉化助手)
 
 基于 Rust 与 egui 构建的跨平台图形化 Minecraft 模组翻译工具，通过 AI 大模型实现智能汉化，支持 JAR、JSON、LANG 及 SNBT 多种格式的自动化处理，旨在为玩家与汉化者提供高效、精准的翻译体验。支持全量翻译和增量式翻译。
-![alt text](image.png)
+
 
 ## 核心功能
 - **多格式支持**：支持任务汉化 (SNBT) 和模组汉化 (JAR、JSON、LANG)
@@ -10,7 +10,7 @@
 - **自定义提示词**：支持用户自定义 System Prompt，可针对不同类型的整合包和模组灵活调整翻译风格与术语表。
 - **多批次并行**：大文件自动切分，并发请求 API，大幅提升长文本翻译速度。
 - **跨平台**：支持 Windows / Linux / macOS
-
+![alt text](image.png)
 ## 使用说明
 ### 1. 任务汉化（流程待完善）
    - 在1.21+，ftbquests 已原生支持语言文件，所以只需翻译对应的语言文件
