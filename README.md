@@ -101,12 +101,12 @@ cargo build --release
 * `config/ftbquests/**/*.snbt` (任务文件)
 
 ## TODO
-[ ] 支持 kubejs tooltips 导出本地化文件或直接进行本地化
-[ ] 支持 CrT 本地化
-[ ] 支持某些版本的帕秋莉手册？
-[ ] 优化 UI
-[ ] 添加 CLI 支持
-[ ] 采用 langchain 等技术来支持社区词典？
+- [ ] 支持 kubejs tooltips 导出本地化文件或直接进行本地化  
+- [ ] 支持 CrT 本地化  
+- [ ] 支持某些版本的帕秋莉手册？  
+- [ ] 优化 UI  
+- [ ] 添加 CLI 支持  
+- [ ] 采用 langchain 等技术来支持社区词典并优化翻译
 
 ## 🤝 贡献
 本项目处于初期，欢迎提交 Issue 反馈 Bug 或提交 Pull Request 改进代码。
