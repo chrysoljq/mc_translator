@@ -238,17 +238,17 @@ impl eframe::App for MyApp {
                     ui.horizontal(|ui| {
                         ui.text_edit_singleline(&mut self.config.base_url);
                         const LANGUAGES: &[(&str, &str)] = &[
-                            ("en_us", "English (US)"),
-                            ("zh_cn", "简体中文 (Simplified Chinese)"),
-                            ("zh_tw", "繁體中文 (Traditional Chinese)"),
-                            ("ja_jp", "日本語 (Japanese)"),
-                            ("ko_kr", "한국어 (Korean)"),
-                            ("ru_ru", "Русский (Russian)"),
-                            ("fr_fr", "Français (French)"),
-                            ("es_es", "Español (Spanish)"),
-                            ("de_de", "Deutsch (German)"),
-                            ("it_it", "Italiano (Italian)"),
-                            ("pt_br", "Português (Brazil)"),
+                            ("en_us", "English"),
+                            ("zh_cn", "Simplified Chinese"),
+                            ("zh_tw", "Traditional Chinese"),
+                            ("ja_jp", "Japanese"),
+                            ("ko_kr", "Korean"),
+                            ("ru_ru", "Russian"),
+                            ("fr_fr", "French"),
+                            ("es_es", "Spanish"),
+                            ("de_de", "German"),
+                            ("it_it", "Italian"),
+                            ("pt_br", "Brazil"),
                         ];
 
                         egui::ComboBox::from_id_salt("source_lang")

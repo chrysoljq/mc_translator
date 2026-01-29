@@ -3,6 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::sync::Arc;
 use regex::Regex;
+use std::ffi::OsString;
 use tokio_util::sync::CancellationToken;
 use crate::logic::openai::OpenAIClient;
 use crate::logic::common::{TranslationContext, execute_translation_batches};
@@ -15,39 +16,52 @@ pub async fn process_snbt(
     ctx: Arc<TranslationContext>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
-    log_info!("处理 SNBT 任务文件: {}", file_path.display());
-
     let file_stem = file_path.file_stem().unwrap_or_default().to_string_lossy();
-    let output_path = if let Some(idx) = file_path.components().position(|c| c.as_os_str() == "config") {
+
+    let output_path = if let Some(idx) = file_path
+        .components()
+        .position(|c| c.as_os_str() == "config")
+    {
         let relative_path: PathBuf = file_path.components().skip(idx).collect();
-        Path::new(output_root).join(relative_path)
+        let locaized_path: PathBuf = relative_path
+            .iter()
+            .map(|c| {
+                let s = c.to_string_lossy().replace(&ctx.source_lang, &ctx.target_lang);
+                OsString::from(s)
+            })
+            .collect();
+        Path::new(output_root).join(locaized_path)
     } else {
         Path::new(output_root).join(file_path.file_name().unwrap())
     };
-
     if ctx.skip_existing && output_path.exists() {
         log_success!("跳过已存在的文件: {:?}", output_path);
         return Ok(());
     }
 
     let content = fs::read_to_string(file_path)?;
-
-    // 正则提取：仅提取 title, subtitle 和 description 中的文本
+    
     let mut extracted_map = serde_json::Map::new();
     let mut replacements = Vec::new(); // 存储 (Range, KeyIndex) 以便回填
 
     // 匹配 title: "..." 或 subtitle: "..."
     let re_kv = Regex::new(r#"(title|subtitle)\s*:\s*"((?:[^"\\]|\\.)*)""#).unwrap();
     // 匹配 description: [ ... ] 块
-    let re_desc_block = Regex::new(r#"description\s*:\s*\[([\s\S]*?)\]"#).unwrap();
+    let re_desc_block = Regex::new(r#"desc(?:ription)?\s*:\s*\[([\s\S]*?)\]"#).unwrap();
     // 匹配 description 块内部的字符串 "..."
     let re_str = Regex::new(r#""((?:[^"\\]|\\.)*)""#).unwrap();
+    let re_trans_key = Regex::new(r"^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)+$").unwrap();
 
     let mut counter = 0;
 
     // 提取 Title/Subtitle
     for caps in re_kv.captures_iter(&content) {
         if let Some(val_match) = caps.get(2) {
+            if counter == 0 && re_trans_key.is_match(val_match.as_str()) {
+                log_info!("检测到本地化键值 '{}'，跳过文件: {:?}", val_match.as_str(), file_path);
+                return Ok(());
+            }
+
             if val_match.as_str().trim().is_empty() || !val_match.as_str().chars().any(|c| c.is_alphabetic()) {
                 continue;
             }
@@ -65,6 +79,11 @@ pub async fn process_snbt(
             // 在 description 列表内部再次查找字符串
             for str_caps in re_str.captures_iter(block.as_str()) {
                 if let Some(inner_match) = str_caps.get(1) {
+                    if counter == 0 && re_trans_key.is_match(inner_match.as_str()) {
+                         log_info!("检测到本地化键值 '{}'，跳过文件: {:?}", inner_match.as_str(), file_path);
+                         return Ok(());
+                    }
+
                      if inner_match.as_str().trim().is_empty() || !inner_match.as_str().chars().any(|c| c.is_alphabetic()) {
                         continue;
                     }
@@ -86,7 +105,7 @@ pub async fn process_snbt(
         return Ok(());
     }
 
-    log_info!("提取到 {} 条条目，开始翻译...", extracted_map.len());
+    log_info!("提取到 {} 条条目，开始翻译 [{:?}]", extracted_map.len(), file_path);
 
     // 这里 mod_id 传入 "ftbquests" 或文件名作为标识
     let translated_map = execute_translation_batches(

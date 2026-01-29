@@ -10,13 +10,18 @@
 - **自定义提示词**：支持用户自定义 System Prompt，可针对不同类型的整合包和模组灵活调整翻译风格与术语表。
 - **多批次并行**：大文件自动切分，并发请求 API，大幅提升长文本翻译速度。
 - **跨平台**：支持 Windows / Linux / macOS
+- 支持翻译整个整合包或者单独目录/文件的翻译
 ![alt text](image.png)
+
 ## 使用说明
 ### 1. 任务汉化（流程待完善）
    - 在1.21+，ftbquests 已原生支持语言文件，所以只需翻译对应的语言文件
    - 在1.21-，你有两种方式来完成汉化
-     a. 使用 https://www.curseforge.com/minecraft/mc-mods/ftb-quest-localizer 或类似工具导出语言文件，一般会在 `kubejs/assets` 目录下，这种方式需要服务端和客户端均导出
+  
+     a. 使用 https://www.curseforge.com/minecraft/mc-mods/ftb-quest-localizer 或类似工具导出本地化文件，一般会在 `kubejs/assets` 目录下，这种方式强制要求客户端安装相应的汉化
+
      b. 直接汉化，你需要取消勾选`跳过snbt`, 好处是只需服务端安装汉化，步骤简单，坏处是不可使用增量更新
+
 ### 2. 提示词
 良好的提示词能够决定汉化的好坏，你可以通过以下方式优化
   - 添加整合包背景、语气等等，本项目会自动提取模组 id，用占位符 `{MODID}` 标识，例如 

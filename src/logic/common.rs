@@ -138,10 +138,6 @@ pub fn extract_mod_id(path: &Path) -> String {
     }
     log_warn!("发现无法解析的模组：{:?}", path);
 
-    // path.file_stem()
-    //     .unwrap_or_default()
-    //     .to_string_lossy()
-    //     .to_string()
     "unknown_mod".to_string()
 }
 
@@ -152,18 +148,18 @@ pub enum FileFormat {
 }
 
 pub fn get_target_filename(original_name: &str, source_lang: &str, target_lang: &str) -> String {
-    // 简单的替换逻辑：如果不区分大小写地包含 source_lang，则替换为 target_lang
-    // 同时也保留原有的 en_us -> zh_cn 的兜底逻辑，以防 source_lang 设置不精确
+    let s_low = source_lang.to_lowercase();
+    let t_low = target_lang.to_lowercase();
 
-    let lower_name = original_name.to_lowercase();
-    let lower_source = source_lang.to_lowercase();
-    let lower_target = target_lang.to_lowercase();
+    let s_mix = format!("{}{}", &s_low[..3], &s_low[3..].to_uppercase());
+    let t_mix = format!("{}{}", &t_low[..3], &t_low[3..].to_uppercase());
 
-    if lower_name.contains(&lower_source) {
-        original_name.replace(source_lang, target_lang)
-                     .replace(&lower_source, &lower_target)
+    if original_name.contains(&s_mix) {
+        original_name.replace(&s_mix, &t_mix)
+    } else if original_name.contains(&s_low) {
+        original_name.replace(&s_low, &t_low)
     } else {
-        format!("{}_{}", lower_target, original_name)
+        format!("{}_{}", t_low, original_name)
     }
 }
 
