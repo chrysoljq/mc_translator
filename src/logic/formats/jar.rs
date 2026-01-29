@@ -1,4 +1,4 @@
-use crate::{log_info, log_warn, log_err};
+use crate::{log_warn, log_err};
 use crate::logic::common::{FileFormat, TranslationContext, core_translation_pipeline};
 use crate::logic::openai::OpenAIClient;
 use std::fs;
@@ -16,7 +16,6 @@ pub async fn process_jar(
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
     let jar_name = jar_path.file_name().unwrap_or_default().to_string_lossy();
-    log_info!("扫描 JAR: {}", jar_name);
 
     let file = fs::File::open(jar_path)?;
     let mut archive = ZipArchive::new(file)?;

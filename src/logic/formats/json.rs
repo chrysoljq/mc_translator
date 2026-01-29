@@ -1,4 +1,3 @@
-use crate::log_info;
 use crate::logic::common::{
     FileFormat, TranslationContext, core_translation_pipeline, extract_mod_id, read_map_from_file
 };
@@ -14,8 +13,6 @@ pub async fn process_json(
     ctx: Arc<TranslationContext>,
     token: &CancellationToken,
 ) -> anyhow::Result<()> {
-    log_info!("处理 JSON: {}", file_path.display());
-
     let src_map = read_map_from_file(file_path, FileFormat::Json)?;
     if src_map.is_empty() {
         return Ok(());
