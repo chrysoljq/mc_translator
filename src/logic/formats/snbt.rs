@@ -80,8 +80,8 @@ pub async fn process_snbt(
             for str_caps in re_str.captures_iter(block.as_str()) {
                 if let Some(inner_match) = str_caps.get(1) {
                     if counter == 0 && re_trans_key.is_match(inner_match.as_str()) {
-                         log_info!("检测到本地化键值 '{}'，跳过文件: {:?}", inner_match.as_str(), file_path);
-                         return Ok(());
+                        log_info!("检测到本地化键值 '{}'，跳过文件: {:?}", inner_match.as_str(), file_path);
+                        return Ok(());
                     }
 
                      if inner_match.as_str().trim().is_empty() || !inner_match.as_str().chars().any(|c| c.is_alphabetic()) {

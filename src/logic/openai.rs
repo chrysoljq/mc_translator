@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::log_warn;
+use crate::{log_err, log_warn};
 use anyhow::{Result, anyhow};
 use reqwest::{Client, RequestBuilder, Response, StatusCode};
 use serde_json::{Value, json};
@@ -194,47 +194,211 @@ impl OpenAIClient {
         // 流式解析处理
         let mut full_content = String::new();
         let mut buffer = String::new();
+        let mut raw_response = String::new();
+        let mut saw_sse_prefix = false;
 
         while let Some(chunk) = resp.chunk().await? {
             if token.is_cancelled() {
                 return Err(anyhow!("任务取消"));
             }
             let s = String::from_utf8_lossy(&chunk);
+            raw_response.push_str(&s);
             buffer.push_str(&s);
 
             while let Some(idx) = buffer.find('\n') {
                 let line = buffer[..idx].trim().to_string();
                 buffer = buffer[idx + 1..].to_string();
 
-                if line.starts_with("data: ") {
-                    let data = line[6..].trim();
+                if line.starts_with("data:") {
+                    saw_sse_prefix = true;
+                    let data = line["data:".len()..].trim();
                     if data == "[DONE]" {
-                        break;
+                        continue;
                     }
-                    if let Ok(v) = serde_json::from_str::<Value>(data) {
-                        if let Some(content) = v["choices"][0]["delta"]["content"].as_str() {
-                            full_content.push_str(content);
-                        }
-                    }
+                    self.append_text_from_payload(data, &mut full_content);
                 }
             }
         }
 
+        if !buffer.trim().is_empty() {
+            let remaining = buffer.trim();
+            if remaining.starts_with("data:") {
+                saw_sse_prefix = true;
+                let data = remaining["data:".len()..].trim();
+                if data != "[DONE]" {
+                    self.append_text_from_payload(data, &mut full_content);
+                }
+            }
+        }
+
+        if full_content.is_empty() && !saw_sse_prefix {
+            self.append_text_from_payload(raw_response.trim(), &mut full_content);
+        }
+
         if full_content.is_empty() {
+            log_err!(
+                "[{}] API 返回内容为空。原始响应长度: {}，片段: {:?}",
+                mod_id,
+                raw_response.len(),
+                Self::preview_text(&raw_response, 300)
+            );
             return Err(anyhow!("API 返回内容为空"));
         }
 
         let clean_content = self.clean_json_string(&full_content);
-        let parsed: Vec<String> = serde_json::from_str(&clean_content)?;
+        let parsed: Vec<String> = match serde_json::from_str(&clean_content) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                log_err!(
+                    "[{}] 翻译响应 JSON 解析失败。原始长度: {}，清洗后长度: {}，原始片段: {:?}，清洗后片段: {:?}",
+                    mod_id,
+                    full_content.len(),
+                    clean_content.len(),
+                    Self::preview_text(&full_content, 300),
+                    Self::preview_text(&clean_content, 300)
+                );
+                return Err(anyhow!("响应解析失败: {}", e));
+            }
+        };
         Ok(parsed)
     }
 
     fn clean_json_string(&self, s: &str) -> String {
-        s.trim()
+        let s = Self::strip_think_blocks(s);
+        let s = s
+            .trim()
             .trim_start_matches("```json")
             .trim_start_matches("```")
             .trim_end_matches("```")
-            .trim()
-            .to_string()
+            .trim();
+
+        Self::extract_json_array(s).unwrap_or_else(|| s.to_string())
+    }
+
+    fn append_text_from_payload(&self, payload: &str, output: &mut String) {
+        if payload.is_empty() {
+            return;
+        }
+
+        if let Ok(v) = serde_json::from_str::<Value>(payload) {
+            if let Some(content) = Self::extract_text_from_value(&v) {
+                output.push_str(&content);
+            }
+        }
+    }
+
+    fn extract_text_from_value(value: &Value) -> Option<String> {
+        if let Some(content) = value["choices"][0]["delta"]["content"].as_str() {
+            return Some(content.to_string());
+        }
+
+        if let Some(content) = value["choices"][0]["message"]["content"].as_str() {
+            return Some(content.to_string());
+        }
+
+        if let Some(content) = value["choices"][0]["text"].as_str() {
+            return Some(content.to_string());
+        }
+
+        if let Some(content) = value["response"]["output_text"].as_str() {
+            return Some(content.to_string());
+        }
+
+        if let Some(arr) = value["choices"][0]["message"]["content"].as_array() {
+            let joined = arr
+                .iter()
+                .filter_map(|item| {
+                    item["text"]
+                        .as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| item["content"].as_str().map(|s| s.to_string()))
+                })
+                .collect::<Vec<_>>()
+                .join("");
+
+            if !joined.is_empty() {
+                return Some(joined);
+            }
+        }
+
+        None
+    }
+
+    fn preview_text(s: &str, max_chars: usize) -> String {
+        let mut preview = String::new();
+        let mut count = 0;
+
+        for ch in s.chars() {
+            if count >= max_chars {
+                preview.push_str("...");
+                break;
+            }
+            preview.push(ch);
+            count += 1;
+        }
+
+        preview
+            .replace('\r', "\\r")
+            .replace('\n', "\\n")
+            .replace('\t', "\\t")
+    }
+
+    fn strip_think_blocks(s: &str) -> String {
+        let mut result = String::with_capacity(s.len());
+        let mut rest = s;
+
+        loop {
+            if let Some(start) = rest.find("<think>") {
+                result.push_str(&rest[..start]);
+                let after_start = &rest[start + "<think>".len()..];
+                if let Some(end) = after_start.find("</think>") {
+                    rest = &after_start[end + "</think>".len()..];
+                } else {
+                    break;
+                }
+            } else {
+                result.push_str(rest);
+                break;
+            }
+        }
+
+        result
+    }
+
+    fn extract_json_array(s: &str) -> Option<String> {
+        let start = s.find('[')?;
+        let mut depth = 0usize;
+        let mut in_string = false;
+        let mut escaped = false;
+
+        for (idx, ch) in s[start..].char_indices() {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                match ch {
+                    '\\' => escaped = true,
+                    '"' => in_string = false,
+                    _ => {}
+                }
+                continue;
+            }
+
+            match ch {
+                '"' => in_string = true,
+                '[' => depth += 1,
+                ']' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let end = start + idx + ch.len_utf8();
+                        return Some(s[start..end].trim().to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 }

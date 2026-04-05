@@ -1,115 +1,122 @@
-# MC Mod Translator (Minecraft 模组汉化助手)
+# MC Mod Translator (Minecraft 模组智能汉化助手)
 
-基于 Rust 与 egui 构建的跨平台图形化 Minecraft 模组翻译工具，通过 AI 大模型实现智能汉化，支持 JAR、JSON、LANG 及 SNBT 多种格式的自动化处理，旨在为玩家与汉化者提供高效、精准的翻译体验。支持全量翻译和增量式翻译。
+基于 **Rust** 与 **egui** 构建的跨平台图形化 Minecraft 模组翻译工具。利用 AI 大模型（LLM）的强大能力，实现对 JAR、JSON、LANG 及 SNBT 等多格式文件的自动化处理，为玩家与汉化者提供高效、精准的翻译体验。
 
+## ✨ 核心功能
 
-## 核心功能
-- **多格式支持**：支持任务汉化 (SNBT) 和模组汉化 (JAR、JSON、LANG)
-- **智能汉化**：通过 AI 大模型实现智能汉化，支持全量翻译和增量式翻译；自动提取翻译文本，最大化节省 token 和钱包。
-- **增量更新**：支持"更新翻译/增量式翻译"模式，读取旧汉化文件和内置汉化文件，仅翻译新增的条目，保留原有的人工校对内容。
-- **自定义提示词**：支持用户自定义 System Prompt，可针对不同类型的整合包和模组灵活调整翻译风格与术语表。
-- **多批次并行**：大文件自动切分，并发请求 API，大幅提升长文本翻译速度。
-- **跨平台**：支持 Windows / Linux / macOS
-- 支持翻译整个整合包或者单独目录/文件的翻译
-![alt text](image.png)
+- **全格式支持**：
+  - **模组汉化**：直接读取 `.jar` 模组文件、`.json` 不定形语言文件、`.lang` 传统语言文件。
+  - **任务汉化**：深度支持 FTB Quests (`.snbt`) 任务文件解析与翻译。
+- **AI 智能驱动**：
+  - **上下文感知**：基于 AI 理解能力，提供比机翻更通顺的文本。
+  - **增量翻译**：智能比对旧版汉化文件，**仅翻译新增条目**，完美保留人工校对的历史成果，最大化节省 Token 消耗。内置 > 社区 > 机翻。
+- **高度可定制**：
+  - **Prompt 工程**：支持自定义 System Prompt，可针对特定整合包风格注入背景设定。
+  - **术语表支持**：通过提示词植入游戏专业术语表，确保专有名词翻译准确一致。
+- **高性能架构**：
+  - **并发处理**：大文件自动切分，多线程并发请求 API，显著提升长文本翻译速度。
+  - **跨平台**：基于 Rust/Egui，原生支持 Windows / Linux / macOS。
+![Preview](image.png)
 
-## 使用说明
-### 基本使用方式
-1. 选择你要汉化的任意整合包或者目录，甚至单个文件，对于文件夹，默认会遍历 `["resources", "mods", "kubejs", "assets", "lang"， "config/ftbquests/quests"]` 这些可能包含需要汉化的目录
-2. 点击翻译，建议使用“更新翻译”功能，仅补全未翻译内容。这种情况下你可以将输出目录设为 i18n 汉化材质包（需要解压），以快速翻译
-3. 默认生成 `assets` 资源目录，可直接作为材质包使用；对于任务，生成 `config` 标准目录，覆盖安装
-4. `raw_content` 文件夹仅用于核对新增内容
-5. 不限于我的世界，其他任意 lang 或 json 标准语言格式文件均可以自动导出翻译文本
+## 🚀 使用说明
 
-### 任务汉化
-   - 在1.21+，ftbquests 已原生支持语言文件，所以只需翻译对应的语言文件
-   - 在1.21-，你有两种方式来完成汉化
-  
-     a. 使用 https://www.curseforge.com/minecraft/mc-mods/ftb-quest-localizer 或类似工具导出本地化文件，一般会在 `kubejs/assets` 目录下，这种方式强制要求客户端安装相应的汉化
+### 快速开始
+1. **选择输入**：选择需要汉化的整合包根目录、`mods` 等目录或单个文件。
+   - 程序会自动扫描 `resources`, `mods`, `kubejs`, `assets`, `config/ftbquests` 等关键路径。
+2. **配置输出**：
+   - 建议选择 **“增量更新/更新翻译”** 模式。
+   - 可将输出目录指向现有的 `i18n` 汉化资源包目录（如已解压），程序将自动补全缺失的翻译。
+3. **开始翻译**：
+   - 翻译完成后会生成标准 `assets` 资源结构，可直接打包为材质包使用。
+   - 任务文件会生成对应的 `config` 结构，支持直接覆盖安装。
+   - `raw_content` 目录仅用于核对原始内容，通常无需关注。
 
-     b. 直接汉化, 好处是只需服务端安装汉化，步骤简单，坏处是不可使用增量更新
+### 任务脚本汉化指南 (FTB Quests)
+针对不同 Minecraft 版本，策略有所不同：
 
-### 提示词
-良好的提示词能够决定汉化的好坏，你可以通过以下方式优化
-  - 添加整合包背景、语气等等，本项目会自动提取模组 id，用占位符 `{MODID}` 标识，例如 
-  ```
-    当前整合包为 RLCraftDregora, 这是一个核污染后的末日世界。当前模组有【冰火之歌、逃逸寄生虫】等
-  ```
-- 术语翻译：如果你想让 AI 给出更专业和一致性的翻译，可以指定术语表或者让 AI 以某种特定格式的翻译
-  + 示例 1：给出一些术语表
-  ```
-  "Cart":["马车","车","货车","推车","敞篷大车"]
-  ```
-  + 示例 2：指定格式 `<t s='原文'>译文</t>`、`译文(原文)`，后者可以在保证可读性的情况下且能避免AI胡乱翻译
-  ```
-  - 如果遇到专业词汇请按照 `<t s='原文'>译文</t>` 格式翻译
-  ```
-  随后通过正则匹配搜索提取专业词汇，用于优化专有名词的翻译或者结合相应词库进行翻译
-- `{SOURCE_LANG}`、`{TARGE_LANG}`用于指示翻译的源语言和目标语言
-- 你也可以让ai给你攥写一份提示词
-- 注意，最好不要移除 `请严格保留格式代码（如 §a, %s, {{0}}，\\n 等）`、`只返回纯净的 JSON 字符串，不要包含 Markdown 代码块标记` 限制，可能会影响代码解析
+- **Minecraft 1.21+**：
+  - FTB Quests 原生支持语言文件。
+- **Minecraft 1.21 以下**：
+  - **方案 A（推荐 - 兼容性好）**：
+    使用 [FTB Quest Localizer](https://www.curseforge.com/minecraft/mc-mods/ftb-quest-localizer) 导出本地化文件（通常位于 `kubejs/assets`），然后对此文件进行翻译。此方案需要客户端加载汉化资源包。
+  - **方案 B（简单直接）**：
+    直接对 `.snbt` 文件进行硬翻译。优点是服务端部署后客户端无需额外汉化，缺点是难以进行增量更新维护。
 
-## ⚙️ 配置
-主要功能可通过GUI配置，可以修改 `MC_Translator/config.json` 来配置当前可用功能。
+### 💡 提示词 (Prompt) 优化技巧
+优秀的 Prompt 是高质量翻译的关键，您可以在配置中尝试以下技巧：
+
+1. **注入背景信息**：
+   ```text
+   当前整合包为 RLCraftDregora，这是一个核污染后的末日废土世界。
+   当前模组包含【冰火之歌】、【寄生虫】等高难度模组，翻译风格需压抑、硬核。
+   ```
+2. **统一术语表**：
+   ```text
+   请严格遵守以下术语翻译：
+   "Cart": ["大车", "板车"] (不要翻译成购物车)
+   "Mob": ["生物", "怪物"]
+   ```
+3. **保留原文对照**（便于校对）：
+   ```text
+   遇到生僻专有名词，请按 `<t s='原文'>译文</t>` 格式输出，保留原文以便查阅。
+   ```
+
+## ⚙️ 配置详解
+
+主要功能可通过 GUI 配置，亦可手动修改 `MC_Translator/config.json`：
+
 ```json
 {
-  "api_key": "sk-114514",
-  "base_url": "https://api.openai.com/v1",
-  "input_path": "/path/to/your/modpack",
-  "output_path": "/path/to/your/output",
-  "check_path": "", // 暂时不可用的检查路径，可以将output_path指向你的原先汉化文件路径，然后使用增量翻译功能，翻译内容会增加到原先的末尾
-  "model": "gemini-3-pro-preview",
-  "source_lang": "en_us",
-  "target_lang": "zh_cn",
-  "batch_size": 100, // 请求的批次大小，由于只翻译键名，可以设置大一点保证上下文的一致性
-  "skip_existing": true, // 跳过已存在的文件，主要用于不可增量汉化的任务汉化，其他情况建议使用增量翻译
-  "timeout": 600, // 超时时间，遇到 500, 524 错误通常原因是超时时间太短
-  "max_retries": 5, // 最大重试次数
-  "retry_delay": 10, // 初始重试时间间隔，秒
-  "file_semaphore": 5, // 并发文件数，太大可能触发 429 too many request
-  "max_network_concurrency": 10, // 最大并发网络请求数
-  "prompt": "你是一个《我的世界》(Minecraft) 模组本地化专家。当前模组 ID: 【{MOD_ID}】。\n我将发送一个包含英文原文的 JSON 字符串数组。\n请将数组中的每一项翻译为简体中文，并返回一个 JSON 字符串数组。\n要求：1\n1. **严格保持顺序**：输出数组的第 N 项必须对应输入数组的第 N 项。\n2. **严格保持长度**：输出数组的元素数量必须与输入完全一致。\n3. 请严格保留格式代码（如 §a, %s, {{0}}，\\n 等）。\n4. 只返回纯净的 JSON 字符串，不要包含 Markdown 代码块标记。"
+  "api_key": "sk-xxxxxx",                // LLM API 密钥
+  "base_url": "https://api.openai.com/v1", // API 接口地址
+  "input_path": "./modpack",              // 输入路径
+  "output_path": "./output",              // 输出路径
+  "model": "gemini-3-pro-preview",        // 模型名称
+  "source_lang": "en_us",                 // 源语言代码
+  "target_lang": "zh_cn",                 // 目标语言代码
+  "batch_size": 100,                      // 单次请求的条目数，较大值有助于保持上下文一致性
+  "skip_existing": true,                  // 跳过已翻译文件（主要针对不可增量的硬翻译模式）
+  "timeout": 600,                         // 请求超时时间 (秒)
+  "max_retries": 5,                       // 失败重试次数
+  "file_semaphore": 5,                    // 文件并发处理限制 (过高可能导致 429 错误)
+  "max_network_concurrency": 10,          // 网络请求并发限制
+  "prompt": "..."                         // 自定义系统提示词
 }
 ```
 
 ## 🛠️ 安装与构建
 
-### 预编译版本
+### 下载预编译版本
+前往 [Releases](https://github.com/chrysoljq/mc_translator/releases) 页面下载适用于 Windows / Linux / macOS 的最新版本，解压即用。
 
-请前往 [Releases](https://github.com/chrysoljq/mc_translator/releases) 页面下载适用于 Windows / Linux / macOS 的最新版本。
+### 源码构建
+如果您安装了 Rust 环境，可以手动编译：
 
-### 从源码构建
-可以通过 fork 本项目自动构建，也可以手动编译本项目：
 ```bash
-# 1. 克隆仓库
 git clone https://github.com/chrysoljq/mc_translator.git
 cd mc_translator
-
-# 2. 编译发布版本
 cargo build --release
 ```
+编译文件位于 `target/release/` 目录。
 
-编译完成后，可执行文件位于 `target/release/` 目录下。
+## 📂 支持的文件类型自动识别
+- `mods/*.jar` (自动提取语言文件)
+- `assets/*/lang/*.json`
+- `assets/*/lang/*.lang`
+- `kubejs/assets/*/lang/*.json`
+- `config/ftbquests/**/*.snbt` (任务结构文件)
 
-## 📂 支持的目录结构
-程序会自动识别输入文件夹中的以下内容：
-* `mods/*.jar` (自动解压读取)
-* `assets/*/lang/en_us.json`
-* `assets/*/lang/en_us.lang`
-* `resources/*/lang/en_us.json`
-* `kubejs/assets/*/lang/en_us.json`
-* `config/ftbquests/**/*.snbt` (任务文件)
-
-## TODO
-- [ ] 支持 kubejs tooltips 导出本地化文件或直接进行本地化  
-- [ ] 支持 CrT 本地化  
-- [ ] 支持某些版本的帕秋莉手册？  
-- [ ] 优化 UI  
-- [ ] 添加 CLI 支持  
-- [ ] 采用 langchain 等技术来支持社区词典并优化翻译
+## 🗓️ 待办事项 (TODO)
+- [ ] 支持 KubeJS Tooltips 导出或直接汉化
+- [ ] 支持 CrT (CraftTweaker) 脚本汉化
+- [ ] 支持 Patchouli (帕秋莉) 手册汉化
+- [ ] UI 界面美化与交互优化
+- [ ] CLI 命令行模式支持
+- [ ] 集成社区词典
+- [ ] 更多...
 
 ## 🤝 贡献
-本项目处于初期，欢迎提交 Issue 反馈 Bug 或提交 Pull Request 改进代码。
+本项目处于早期开发阶段，欢迎提交 Issue 反馈 Bug，或提交 Pull Request 共同改进！
 
 ## 📜 许可证
-本项目采用 **GPL-3.0** 许可证
+本项目采用 **GPL-3.0** 许可证。
